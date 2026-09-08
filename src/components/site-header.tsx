@@ -42,6 +42,14 @@ export async function SiteHeader() {
               >
                 <MessageCircle className="size-5" />
               </Link>
+              {user.role === "ADMIN" && (
+                <Link
+                  href="/admin"
+                  className="hidden rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 lg:block"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/mi-cuenta"
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 hover:bg-slate-100"

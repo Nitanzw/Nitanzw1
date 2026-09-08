@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { sendNewMessageEmail } from "@/lib/emails";
 
 export type MessageState = { error?: string; ok?: boolean } | undefined;
 
@@ -19,9 +21,13 @@ export async function startConversationAction(
   if (!user) redirect(`/ingresar?next=${encodeURIComponent(`/aviso/${listingId}`)}`);
   if (body.length < 2) return { error: "Escribe un mensaje" };
 
+  // Tope de mensajes iniciales por usuario: evita el spam a varios vendedores.
+  const limit = checkRateLimit(`conversation:${user.id}`, 20, 3600);
+  if (!limit.allowed) return { error: "Enviaste muchos mensajes seguidos. Inténtalo más tarde." };
+
   const listing = await prisma.listing.findUnique({
     where: { id: listingId },
-    select: { id: true, userId: true, allowMessages: true },
+    select: { id: true, userId: true, allowMessages: true, title: true },
   });
   if (!listing || !listing.allowMessages) return { error: "Este aviso no recibe mensajes" };
   if (listing.userId === user.id) return { error: "No puedes escribirte a ti mismo" };
@@ -35,6 +41,12 @@ export async function startConversationAction(
   await prisma.message.create({
     data: { conversationId: conversation.id, senderId: user.id, body },
   });
+
+  const seller = await prisma.user.findUnique({
+    where: { id: listing.userId },
+    select: { name: true, email: true },
+  });
+  if (seller) await sendNewMessageEmail(seller, listing.title, conversation.id);
 
   revalidatePath("/mi-cuenta/mensajes");
   return { ok: true };

@@ -50,7 +50,7 @@ export default async function FeaturePage({ params }: { params: Promise<{ id: st
       <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-slate-100">
           {listing.images[0] && (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img
               src={listing.images[0].thumbnailUrl ?? listing.images[0].url}
               alt=""

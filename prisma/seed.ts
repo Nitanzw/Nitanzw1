@@ -165,6 +165,19 @@ async function main() {
     },
   });
 
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@oktienda.cl";
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: { role: "ADMIN" },
+    create: {
+      email: adminEmail,
+      name: "Administración oktienda",
+      role: "ADMIN",
+      emailVerified: new Date(),
+      passwordHash: await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? "oktienda123", 12),
+    },
+  });
+
   const santiago = await prisma.commune.findFirst({ where: { name: "Santiago" } });
   const vina = await prisma.commune.findFirst({ where: { name: "Viña del Mar" } });
 
@@ -238,7 +251,9 @@ async function main() {
     });
   }
 
-  console.log("Listo. Cuenta demo: demo@oktienda.cl / oktienda123");
+  console.log("Listo.");
+  console.log("  Vendedor demo: demo@oktienda.cl / oktienda123");
+  console.log(`  Administrador: ${adminEmail} / ${process.env.SEED_ADMIN_PASSWORD ?? "oktienda123"}`);
 }
 
 main()

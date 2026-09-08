@@ -11,6 +11,7 @@ import { incrementViews } from "@/app/actions/listings";
 import { Gallery } from "@/components/gallery";
 import { ContactSeller } from "@/components/contact-seller";
 import { ListingCard } from "@/components/listing-card";
+import { ReportListing } from "@/components/report-listing";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ async function getListing(param: string) {
       images: { orderBy: { position: "asc" } },
       category: { include: { parent: true } },
       commune: { include: { region: true } },
-      user: { select: { id: true, name: true, avatarUrl: true, createdAt: true } },
+      user: { select: { id: true, name: true, avatarUrl: true, emailVerified: true, createdAt: true } },
     },
   });
 }
@@ -171,6 +172,10 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
               <li>oktienda.cl nunca te pedirá transferencias anticipadas ni códigos por mensaje.</li>
             </ul>
           </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <ReportListing listingId={listing.id} />
+          </section>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-32 lg:self-start">
@@ -181,10 +186,15 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
                 {listing.user.name.charAt(0).toUpperCase()}
               </span>
               <div>
-                <p className="font-semibold text-ink-900">{listing.user.name}</p>
+                <Link href={`/vendedor/${listing.user.id}`} className="font-semibold text-ink-900 hover:text-brand-700">
+                  {listing.user.name}
+                </Link>
                 <p className="text-xs text-ink-500">
                   En oktienda desde {listing.user.createdAt.toLocaleDateString("es-CL", { month: "long", year: "numeric" })}
                 </p>
+                {listing.user.emailVerified && (
+                  <p className="text-xs font-medium text-brand-700">Correo verificado</p>
+                )}
               </div>
             </div>
 

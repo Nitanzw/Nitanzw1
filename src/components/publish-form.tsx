@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import type { Vertical } from "@prisma/client";
-import { createListingAction, type ListingFormState } from "@/app/actions/listings";
+import { createListingAction } from "@/app/actions/listings";
 import { fieldsFor } from "@/lib/verticals";
 
 type CategoryOption = {
@@ -249,7 +249,7 @@ export function PublishForm({
         <div className="flex flex-wrap gap-3">
           {images.map((image) => (
             <div key={image.url} className="relative size-24 overflow-hidden rounded-lg border border-slate-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src={image.thumbnailUrl} alt="" className="size-full object-cover" />
               <button
                 type="button"

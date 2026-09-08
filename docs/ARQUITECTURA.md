@@ -1,0 +1,153 @@
+# Arquitectura de oktienda.cl
+
+Este documento explica **dónde vive cada cosa** y **cómo agregar funciones nuevas**
+sin tener que rehacer lo existente. Si vas a sumar algo, busca acá la receta antes
+de improvisar una estructura nueva.
+
+## Principios
+
+1. **Un punto de extensión por concepto.** Los verticales, los planes, los pagos,
+   el almacenamiento y el correo se declaran cada uno en un solo archivo. Agregar
+   una variante es editar ese archivo, no repartir cambios por toda la app.
+2. **Los datos flexibles van en JSON, no en columnas nuevas.** Los atributos de
+   cada vertical viven en `Listing.attributes`, así que sumar un vertical no
+   requiere migración.
+3. **Las mutaciones son Server Actions.** Cada acción valida con zod, verifica
+   permisos por su cuenta y llama `revalidatePath`. No hay una capa de API REST
+   que mantener en paralelo.
+4. **Cada capa externa está detrás de una interfaz.** Correo, pagos y archivos se
+   eligen por variable de entorno; el resto del código no sabe cuál está activo.
+5. **La autorización se repite en cada acción.** Los layouts que redirigen son
+   comodidad para el usuario, nunca la única barrera.
+
+## Mapa del código
+
+```
+prisma/schema.prisma     Modelo de datos. Fuente de verdad de los tipos.
+prisma/seed.ts           Regiones, comunas, categorías, cuentas demo y admin.
+
+src/lib/                 Lógica sin UI. Testeable y reutilizable.
+  auth.ts                Sesión (JWT en cookie httpOnly) y contraseñas.
+  emails.ts              Plantillas de correos transaccionales.
+  featuring.ts           Acreditación de pagos y vigencia de destacados.
+  mail.ts                Envío de correo: console / smtp / resend.
+  payments.ts            Proveedores de pago: dev / mercadopago.
+  plans.ts               Catálogo de planes de destacado.
+  prisma.ts              Cliente de base de datos (singleton).
+  rate-limit.ts          Límite de intentos por ventana de tiempo.
+  search.ts              Query params → consulta Prisma.
+  storage.ts             Imágenes: procesamiento y destino (local / S3).
+  tokens.ts              Tokens de un solo uso (verificación, recuperación).
+  utils.ts               Formato de precios, fechas, slugs y URLs.
+  verticals.ts           Atributos por vertical.
+
+src/app/actions/         Server Actions, agrupadas por dominio.
+src/app/api/             Route handlers: subida de imágenes, webhook, cron.
+src/components/          UI reutilizable. Client Components solo donde hace falta.
+tests/                   Tests unitarios de src/lib (node:test + tsx).
+```
+
+## Recetas
+
+### Agregar un vertical (o un campo a uno existente)
+
+Editar **solo** `src/lib/verticals.ts`:
+
+```ts
+BOATS: {
+  label: "Náutica",
+  fields: [
+    { key: "length", label: "Eslora", type: "number", unit: "m", filterable: true },
+    { key: "engine", label: "Motor", type: "select", options: ["Fuera de borda", "Intraborda"] },
+  ],
+},
+```
+
+Si es un vertical nuevo, agrégalo también al enum `Vertical` de
+`prisma/schema.prisma`, corre `npm run db:push` y asígnalo a sus categorías.
+
+Se actualizan solos: el formulario de publicación, la validación con zod, los
+filtros de búsqueda (`filterable: true`) y la tabla de características de la ficha.
+
+### Agregar un plan de destacado
+
+Editar `src/lib/plans.ts`. Los códigos ya vendidos no deben cambiar de nombre:
+quedan guardados en `Payment.planCode` para conciliar.
+
+### Agregar un proveedor de pago (por ejemplo Webpay)
+
+En `src/lib/payments.ts`, implementa la interfaz `PaymentProvider` y regístralo en
+`PROVIDERS`. Luego `PAYMENT_PROVIDER=webpay`.
+
+```ts
+const webpayProvider: PaymentProvider = {
+  name: "webpay",
+  async createCheckout({ paymentId, plan, siteUrl }) {
+    // …crear la transacción y devolver a dónde enviar al usuario
+    return { redirectUrl, providerRef };
+  },
+};
+```
+
+La acreditación entra por `src/app/api/pagos/webhook/route.ts` y termina siempre
+en `confirmPayment()`, que es idempotente. **Nunca acredites confiando en lo que
+llega en el cuerpo de la notificación**: consulta el estado contra el proveedor.
+
+### Agregar un destino de archivos o un proveedor de correo
+
+Mismo patrón: `TRANSPORTS` en `src/lib/mail.ts`, y el `driver()` de
+`src/lib/storage.ts`. Ambos se eligen por variable de entorno.
+
+### Agregar una página
+
+- Pública: `src/app/<ruta>/page.tsx`. Si consulta la base, agrega
+  `export const dynamic = "force-dynamic"`.
+- De cuenta: dentro de `src/app/mi-cuenta/`; el layout ya exige sesión, y una
+  entrada nueva en su arreglo `TABS` la muestra en la navegación.
+- De administración: dentro de `src/app/admin/`; el layout exige rol `ADMIN`.
+
+### Agregar una acción que escribe en la base
+
+Crea o edita un archivo en `src/app/actions/`. El molde es siempre el mismo:
+
+```ts
+"use server";
+
+export async function miAccion(_state: Estado, formData: FormData): Promise<Estado> {
+  const user = await getCurrentUser();            // 1. quién es
+  if (!user) redirect("/ingresar");               // 2. puede hacerlo?
+  const parsed = miSchema.safeParse({ … });       // 3. validar entrada
+  if (!parsed.success) return { error: … };
+  await prisma…                                   // 4. escribir
+  revalidatePath("/donde-se-ve");                 // 5. refrescar
+  return { ok: true };
+}
+```
+
+Si la acción puede abusarse (correos, mensajes, intentos de clave), pásala por
+`checkRateLimit`.
+
+### Agregar una tarea programada
+
+Crea una ruta bajo `src/app/api/cron/` con el mismo guardia de `CRON_SECRET` que
+usa `expirar/route.ts`, y agenda la llamada desde el cron de tu servidor,
+Vercel Cron o GitHub Actions.
+
+## Decisiones tomadas y por qué
+
+| Decisión | Razón |
+| --- | --- |
+| Sesión propia con JWT en cookie, sin librería de auth | Menos dependencias y control total sobre el flujo; el proyecto no necesita OAuth todavía. |
+| Atributos en JSON en vez de tablas por vertical | Sumar verticales no debe implicar migraciones ni joins nuevos. |
+| Server Actions en vez de API REST | Una sola capa que mantener; la validación vive junto al uso. |
+| Búsqueda con `ILIKE` | Suficiente para el catálogo inicial; migrar a `tsvector` o Meilisearch cuando crezca. |
+| Límite de intentos en memoria | Suficiente para una instancia. Con varias, reemplazar por Redis en `rate-limit.ts`. |
+| Imágenes procesadas al subir | Evita depender de un servicio de transformación y abarata el CDN. |
+
+## Cosas que faltan (pendientes conocidos)
+
+- Alertas por correo de las búsquedas guardadas (el modelo y la UI ya están; falta el job).
+- Boleta electrónica de los pagos.
+- Integración con Webpay.
+- Búsqueda full-text en español.
+- Bloqueo de usuarios en el panel de administración (hoy solo se moderan avisos).

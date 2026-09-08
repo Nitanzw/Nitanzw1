@@ -14,6 +14,8 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 | Sesiones | JWT propio firmado con `jose`, en cookie httpOnly |
 | Imágenes | `sharp` (WebP + miniatura) sobre disco local o S3/R2 |
 | Pagos | Capa propia con proveedores intercambiables (`dev`, Mercado Pago) |
+| Correo | `console` / SMTP / Resend, detrás de una misma interfaz |
+| Calidad | ESLint, tests con `node:test` y CI en GitHub Actions |
 
 ## Puesta en marcha
 
@@ -25,7 +27,14 @@ npm run db:seed               # regiones, comunas, categorías y avisos demo
 npm run dev                   # http://localhost:3000
 ```
 
-Cuenta de prueba que crea el seed: `demo@oktienda.cl` / `oktienda123`.
+Cuentas que crea el seed:
+
+| Cuenta | Correo | Clave |
+| --- | --- | --- |
+| Vendedor demo | `demo@oktienda.cl` | `oktienda123` |
+| Administrador | `admin@oktienda.cl` | `oktienda123` |
+
+Cambia la clave del administrador en producción con `SEED_ADMIN_PASSWORD`.
 
 Genera el secreto de sesión con `openssl rand -base64 32`.
 
@@ -36,6 +45,8 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` / `npm start` | Build y arranque en producción |
 | `npm run typecheck` | Chequeo de tipos |
+| `npm run lint` | ESLint |
+| `npm test` | Tests unitarios de `src/lib` |
 | `npm run db:push` | Sincroniza el esquema con la base |
 | `npm run db:migrate` | Crea una migración versionada |
 | `npm run db:seed` | Carga datos iniciales |
@@ -54,7 +65,52 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Mensajería** comprador ↔ vendedor por aviso.
 - **Destacados pagados**: catálogo de planes, checkout, acreditación por webhook
   y vigencia acumulable en `Listing.featuredUntil`.
-- Registro e inicio de sesión propios, `robots.txt` y `sitemap.xml`.
+- **Cuentas completas**: registro, inicio de sesión, verificación de correo,
+  recuperación de contraseña y límite de intentos contra fuerza bruta.
+- **Perfil público del vendedor** con sus avisos activos y su sello de correo verificado.
+- **Búsquedas guardadas**, para repetir una búsqueda con todos sus filtros.
+- **Denuncias y panel de administración**: métricas, moderación de avisos,
+  bandeja de denuncias y gestión de roles.
+- **Expiración automática** de avisos y destacados vencidos vía `/api/cron/expirar`.
+- `robots.txt`, `sitemap.xml`, páginas de error y de carga.
+
+## Cómo agregar funciones
+
+**Lee [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).** Tiene el mapa del código y
+las recetas concretas para agregar un vertical, un plan, un proveedor de pago o
+correo, una página, una acción o una tarea programada. Cada concepto tiene un solo
+punto de extensión, y casi ninguno requiere tocar la base de datos.
+
+## Correo
+
+`MAIL_DRIVER` elige el transporte: `console` (escribe el correo en el log, ideal
+en desarrollo), `smtp` (cualquier servidor SMTP) o `resend`. Los correos
+transaccionales viven en `src/lib/emails.ts`.
+
+## Moderación
+
+Los usuarios con rol `ADMIN` ven `/admin`: métricas del marketplace, bandeja de
+denuncias, moderación de avisos (bajar, reactivar, eliminar) y gestión de roles.
+Cualquier visitante puede denunciar un aviso desde su ficha.
+
+## Tareas programadas
+
+`/api/cron/expirar` marca vencidos los avisos pasados de fecha, apaga los
+destacados caducados y limpia tokens usados. Protégelo con `CRON_SECRET` y
+llámalo una vez al día:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/expirar
+```
+
+## Calidad
+
+```bash
+npm run typecheck && npm run lint && npm test
+```
+
+Los tests cubren la lógica de `src/lib` (formatos, verticales, búsqueda, planes,
+límite de intentos). GitHub Actions corre lo mismo más el build en cada push.
 
 ## Imágenes
 
@@ -125,6 +181,10 @@ src/
   components/          UI reutilizable
   lib/
     auth.ts            Sesiones y contraseñas
+    emails.ts          Plantillas de correos transaccionales
+    mail.ts            Envío de correo (console / smtp / resend)
+    rate-limit.ts      Límite de intentos por ventana de tiempo
+    tokens.ts          Tokens de un solo uso (verificación, recuperación)
     featuring.ts       Acreditación de pagos y vigencia del destacado
     payments.ts        Proveedores de pago intercambiables
     plans.ts           Catálogo de planes de destacado  ← oferta comercial
@@ -139,9 +199,8 @@ src/
 
 Cosas que la base deja preparadas pero todavía no implementa:
 
-- Verificación de correo y recuperación de contraseña.
+- Alertas por correo de las búsquedas guardadas (falta solo el job que las corre).
 - Boleta electrónica de los pagos (hoy queda el registro en la tabla `Payment`).
 - Integración con Webpay, además de Mercado Pago.
-- Panel de administración y moderación (el modelo `Report` ya está creado).
-- Expiración automática de avisos vencidos (tarea programada sobre `expiresAt`).
+- Bloqueo de usuarios desde el panel (hoy solo se moderan avisos).
 - Búsqueda full-text en español (hoy usa `ILIKE`; el siguiente paso es `tsvector` o Meilisearch).

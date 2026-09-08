@@ -28,7 +28,7 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
     >
       <div className="relative aspect-4/3 w-full overflow-hidden bg-slate-100">
         {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={cover}
             alt={listing.title}

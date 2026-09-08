@@ -51,6 +51,11 @@ enum Condition {
   USED
 }
 
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -79,6 +84,7 @@ model User {
   conversationsAsSeller Conversation[] @relation("ConversationSeller")
   reports               Report[]
   payments              Payment[]
+  tokens                Token[]
 }
 
 /// Árbol de categorías. `vertical` decide qué atributos extra pide el formulario.
@@ -226,16 +232,18 @@ model Message {
 }
 
 model Report {
-  id        String   @id @default(cuid())
-  listingId String
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  reason    String
-  detail    String?
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  listingId  String
+  listing    Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reason     String
+  detail     String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([listingId])
+  @@index([resolvedAt])
 }
 
 /// Pago de un plan de destacado. `planCode` referencia src/lib/plans.ts.
@@ -264,4 +272,19 @@ model Payment {
   @@index([userId])
   @@index([listingId])
   @@index([status])
+}
+
+/// Token de un solo uso para verificar el correo o restablecer la contraseña.
+/// Se guarda hasheado: quien lea la base no puede usarlo.
+model Token {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
 }

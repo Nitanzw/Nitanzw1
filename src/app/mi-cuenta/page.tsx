@@ -55,7 +55,7 @@ export default async function MyListingsPage() {
           <Link href={listingHref(listing)} className="shrink-0">
             <div className="size-24 overflow-hidden rounded-lg bg-slate-100">
               {listing.images[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img src={listing.images[0].thumbnailUrl ?? listing.images[0].url} alt="" className="size-full object-cover" />
               ) : null}
             </div>

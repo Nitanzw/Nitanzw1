@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generar cliente de Prisma
+        run: npx prisma generate
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npx next build
+        env:
+          # El build no consulta la base: todas las páginas se renderizan por
+          # petición. Estas variables solo tienen que existir.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-secret-para-el-build-solamente

@@ -7,12 +7,13 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "tsx --test \"tests/**/*.test.ts\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -25,6 +26,7 @@
     "jose": "^6.0.10",
     "lucide-react": "^0.487.0",
     "next": "^15.2.4",
+    "nodemailer": "^10.0.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
@@ -35,8 +37,11 @@
     "@tailwindcss/postcss": "^4.1.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.14.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.1",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
     "prisma": "^6.5.0",
     "tailwindcss": "^4.1.3",
     "tsx": "^4.19.3",

@@ -17,7 +17,7 @@ export function Gallery({ images, title }: { images: { id: string; url: string }
   return (
     <div>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-black">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img
           src={images[active]?.url}
           alt={title}
@@ -37,7 +37,7 @@ export function Gallery({ images, title }: { images: { id: string; url: string }
               }`}
               aria-label={`Ver imagen ${index + 1}`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src={image.url} alt="" className="size-full object-cover" />
             </button>
           ))}

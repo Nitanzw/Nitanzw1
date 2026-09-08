@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ListingCard } from "@/components/listing-card";
 import { SearchFilters } from "@/components/search-filters";
+import { SaveSearch } from "@/components/save-search";
+import { getCurrentUser } from "@/lib/auth";
 import {
   PAGE_SIZE,
   SORT_OPTIONS,
@@ -23,6 +25,7 @@ export default async function SearchPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
+  const user = await getCurrentUser();
   const categorySlug = typeof params.categoria === "string" ? params.categoria : undefined;
 
   const category = categorySlug
@@ -76,6 +79,13 @@ export default async function SearchPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const queryString = new URLSearchParams(
+    Object.entries(params).flatMap(([key, value]) => {
+      const single = Array.isArray(value) ? value[0] : value;
+      return single ? [[key, single] as [string, string]] : [];
+    }),
+  ).toString();
+
   const heading = category?.name ?? (typeof params.q === "string" && params.q ? `"${params.q}"` : "Todos los avisos");
 
   return (
@@ -118,7 +128,8 @@ export default async function SearchPage({
               </p>
             </div>
 
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {user && <SaveSearch query={queryString} suggestedName={heading} />}
               <span className="text-ink-500">Ordenar por</span>
               <div className="flex gap-1">
                 {SORT_OPTIONS.map((option) => {

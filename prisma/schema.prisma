@@ -51,6 +51,13 @@ enum Condition {
   USED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -71,6 +78,7 @@ model User {
   conversationsAsBuyer  Conversation[] @relation("ConversationBuyer")
   conversationsAsSeller Conversation[] @relation("ConversationSeller")
   reports               Report[]
+  payments              Payment[]
 }
 
 /// Árbol de categorías. `vertical` decide qué atributos extra pide el formulario.
@@ -143,6 +151,7 @@ model Listing {
   updatedAt     DateTime  @updatedAt
 
   images        ListingImage[]
+  payments      Payment[]
   favorites     Favorite[]
   conversations Conversation[]
   reports       Report[]
@@ -154,11 +163,12 @@ model Listing {
 }
 
 model ListingImage {
-  id        String  @id @default(cuid())
-  listingId String
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  url       String
-  position  Int     @default(0)
+  id           String  @id @default(cuid())
+  listingId    String
+  listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url          String
+  thumbnailUrl String?
+  position     Int     @default(0)
 
   @@index([listingId])
 }
@@ -226,4 +236,32 @@ model Report {
   createdAt DateTime @default(now())
 
   @@index([listingId])
+}
+
+/// Pago de un plan de destacado. `planCode` referencia src/lib/plans.ts.
+model Payment {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  planCode String
+  days     Int
+  amount   Int
+  currency Currency      @default(CLP)
+  status   PaymentStatus @default(PENDING)
+
+  /// Proveedor de pago usado ("dev", "mercadopago", …).
+  provider    String
+  /// Identificador del pago en el proveedor, para conciliar y evitar duplicados.
+  providerRef String? @unique
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([listingId])
+  @@index([status])
 }

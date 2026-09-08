@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { parseAttributes } from "@/lib/verticals";
 import { listingHref, slugify } from "@/lib/utils";
+import { deleteImage } from "@/lib/storage";
 
 export type ListingFormState = { error?: string } | undefined;
 
@@ -27,6 +28,22 @@ const listingSchema = z.object({
   allowMessages: z.coerce.boolean().optional(),
   images: z.string().optional(),
 });
+
+/// El formulario envía las imágenes ya subidas como JSON: [{url, thumbnailUrl}].
+function parseImages(raw: string | undefined): { url: string; thumbnailUrl: string | null }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is { url: string; thumbnailUrl?: string } =>
+        typeof item === "object" && item !== null && typeof (item as { url?: unknown }).url === "string")
+      .slice(0, 10)
+      .map((item) => ({ url: item.url, thumbnailUrl: item.thumbnailUrl ?? null }));
+  } catch {
+    return [];
+  }
+}
 
 function formToObject(formData: FormData): Record<string, unknown> {
   const object: Record<string, unknown> = {};
@@ -65,11 +82,7 @@ export async function createListingAction(
     return { error: "Ingresa un precio o elige 'Consultar precio'" };
   }
 
-  const imageUrls = (parsed.data.images ?? "")
-    .split(",")
-    .map((url) => url.trim())
-    .filter((url) => url.startsWith("/uploads/"))
-    .slice(0, 10);
+  const images = parseImages(parsed.data.images);
 
   const now = new Date();
   const listing = await prisma.listing.create({
@@ -91,7 +104,7 @@ export async function createListingAction(
       contactPhone: parsed.data.contactPhone ?? user.phone,
       contactWhatsapp: Boolean(parsed.data.contactWhatsapp),
       allowMessages: parsed.data.allowMessages === undefined ? true : Boolean(parsed.data.allowMessages),
-      images: { create: imageUrls.map((url, position) => ({ url, position })) },
+      images: { create: images.map((image, position) => ({ ...image, position })) },
     },
   });
 
@@ -112,7 +125,17 @@ export async function updateListingStatusAction(formData: FormData): Promise<voi
   if (!listing || listing.userId !== user.id) return;
 
   if (action === "delete") {
+    const images = await prisma.listingImage.findMany({
+      where: { listingId: id },
+      select: { url: true, thumbnailUrl: true },
+    });
     await prisma.listing.delete({ where: { id } });
+    // Las filas se borran en cascada; los archivos hay que limpiarlos aparte.
+    await Promise.all(
+      images.flatMap((image) =>
+        [image.url, image.thumbnailUrl].filter((url): url is string => Boolean(url)).map(deleteImage),
+      ),
+    );
   } else {
     const status: Record<string, ListingStatus> = {
       pause: "PAUSED",

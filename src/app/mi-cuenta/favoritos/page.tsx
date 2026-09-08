@@ -18,7 +18,7 @@ export default async function FavoritesPage() {
           id: true, slug: true, title: true, price: true, currency: true, priceType: true,
           featuredUntil: true, publishedAt: true, createdAt: true,
           commune: { select: { name: true } },
-          images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
+          images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
         },
       },
     },

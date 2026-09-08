@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Eye, Heart, Plus } from "lucide-react";
+import { Eye, Heart, Plus, Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { formatPrice, formatRelativeDate, listingHref } from "@/lib/utils";
@@ -56,7 +56,7 @@ export default async function MyListingsPage() {
             <div className="size-24 overflow-hidden rounded-lg bg-slate-100">
               {listing.images[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={listing.images[0].url} alt="" className="size-full object-cover" />
+                <img src={listing.images[0].thumbnailUrl ?? listing.images[0].url} alt="" className="size-full object-cover" />
               ) : null}
             </div>
           </Link>
@@ -72,6 +72,12 @@ export default async function MyListingsPage() {
               <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium">
                 {STATUS_LABEL[listing.status]}
               </span>
+              {listing.featuredUntil && listing.featuredUntil > new Date() && (
+                <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+                  <Star className="size-3 fill-current" />
+                  Destacado hasta {listing.featuredUntil.toLocaleDateString("es-CL")}
+                </span>
+              )}
               <span className="flex items-center gap-1">
                 <Eye className="size-3.5" /> {listing.views}
               </span>
@@ -83,6 +89,12 @@ export default async function MyListingsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/destacar/${listing.id}`}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              {listing.featuredUntil && listing.featuredUntil > new Date() ? "Extender destacado" : "Destacar"}
+            </Link>
             {listing.status === "ACTIVE" ? (
               <StatusButton id={listing.id} action="pause" label="Pausar" />
             ) : (

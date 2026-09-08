@@ -46,7 +46,7 @@ export default async function MessagesPage() {
             <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
               {conversation.listing.images[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={conversation.listing.images[0].url} alt="" className="size-full object-cover" />
+                <img src={conversation.listing.images[0].thumbnailUrl ?? conversation.listing.images[0].url} alt="" className="size-full object-cover" />
               ) : null}
             </div>
             <div className="min-w-0 flex-1">

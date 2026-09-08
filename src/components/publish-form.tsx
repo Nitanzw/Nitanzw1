@@ -48,7 +48,7 @@ export function PublishForm({
   const [priceType, setPriceType] = useState("FIXED");
   const priceNeeded = priceType === "FIXED" || priceType === "NEGOTIABLE";
 
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<{ url: string; thumbnailUrl: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -57,14 +57,14 @@ export function PublishForm({
     setUploading(true);
     setUploadError(null);
     try {
-      const uploaded: string[] = [];
+      const uploaded: { url: string; thumbnailUrl: string }[] = [];
       for (const file of Array.from(files).slice(0, 10 - images.length)) {
         const body = new FormData();
         body.append("file", file);
         const response = await fetch("/api/upload", { method: "POST", body });
-        const result = (await response.json()) as { url?: string; error?: string };
+        const result = (await response.json()) as { url?: string; thumbnailUrl?: string; error?: string };
         if (!response.ok || !result.url) throw new Error(result.error ?? "No se pudo subir la imagen");
-        uploaded.push(result.url);
+        uploaded.push({ url: result.url, thumbnailUrl: result.thumbnailUrl ?? result.url });
       }
       setImages((current) => [...current, ...uploaded].slice(0, 10));
     } catch (error) {
@@ -247,13 +247,13 @@ export function PublishForm({
         <p className="text-sm text-ink-500">Hasta 10 imágenes. La primera será la portada.</p>
 
         <div className="flex flex-wrap gap-3">
-          {images.map((url) => (
-            <div key={url} className="relative size-24 overflow-hidden rounded-lg border border-slate-200">
+          {images.map((image) => (
+            <div key={image.url} className="relative size-24 overflow-hidden rounded-lg border border-slate-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="size-full object-cover" />
+              <img src={image.thumbnailUrl} alt="" className="size-full object-cover" />
               <button
                 type="button"
-                onClick={() => setImages((current) => current.filter((item) => item !== url))}
+                onClick={() => setImages((current) => current.filter((item) => item.url !== image.url))}
                 className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"
                 aria-label="Quitar imagen"
               >
@@ -277,7 +277,7 @@ export function PublishForm({
           )}
         </div>
         {uploadError && <p className="text-sm text-red-700">{uploadError}</p>}
-        <input type="hidden" name="images" value={images.join(",")} />
+        <input type="hidden" name="images" value={JSON.stringify(images)} />
       </section>
 
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">

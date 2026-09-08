@@ -13,13 +13,13 @@ export type ListingCardData = {
   featuredUntil: Date | null;
   publishedAt: Date | null;
   createdAt: Date;
-  images: { url: string }[];
+  images: { url: string; thumbnailUrl: string | null }[];
   commune: { name: string } | null;
 };
 
 export function ListingCard({ listing }: { listing: ListingCardData }) {
   const featured = listing.featuredUntil ? listing.featuredUntil > new Date() : false;
-  const cover = listing.images[0]?.url;
+  const cover = listing.images[0]?.thumbnailUrl ?? listing.images[0]?.url;
 
   return (
     <Link

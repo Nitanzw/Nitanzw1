@@ -12,7 +12,8 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 | Estilos | Tailwind CSS v4 |
 | Base de datos | PostgreSQL + Prisma |
 | Sesiones | JWT propio firmado con `jose`, en cookie httpOnly |
-| Imágenes | Disco local (`public/uploads`), listo para migrar a S3/R2 |
+| Imágenes | `sharp` (WebP + miniatura) sobre disco local o S3/R2 |
+| Pagos | Capa propia con proveedores intercambiables (`dev`, Mercado Pago) |
 
 ## Puesta en marcha
 
@@ -51,7 +52,47 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Cuenta**: mis avisos (pausar / reactivar / marcar vendido / eliminar), favoritos,
   mensajes y perfil con cambio de contraseña.
 - **Mensajería** comprador ↔ vendedor por aviso.
+- **Destacados pagados**: catálogo de planes, checkout, acreditación por webhook
+  y vigencia acumulable en `Listing.featuredUntil`.
 - Registro e inicio de sesión propios, `robots.txt` y `sitemap.xml`.
+
+## Imágenes
+
+Toda imagen subida se normaliza a **WebP** y se guarda en dos tamaños: una versión
+de hasta 1600 px para la ficha y una miniatura de 480×360 para las grillas.
+
+`STORAGE_DRIVER` decide dónde quedan:
+
+- `local` — `public/uploads`. Sirve para desarrollo y para un servidor único con
+  disco persistente.
+- `s3` — cualquier servicio compatible con S3: AWS S3, **Cloudflare R2**, Backblaze B2,
+  MinIO. Es el que corresponde con varias instancias o despliegues efímeros (Vercel).
+  Configura `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL`
+  y, fuera de AWS, `S3_ENDPOINT`.
+
+Cambiar de driver no requiere tocar código: las imágenes ya guardadas conservan su URL.
+
+## Destacados pagados
+
+Los planes viven en `src/lib/plans.ts` (código, nombre, días, precio). Editar ese
+archivo es todo lo que hace falta para cambiar la oferta comercial.
+
+Flujo: el vendedor entra a **Mis avisos → Destacar**, elige un plan, se crea un
+`Payment` en estado `PENDING` y se le redirige al proveedor. La acreditación ocurre
+en `/api/pagos/webhook`, que **nunca confía en el cuerpo de la notificación**: toma el
+identificador y consulta el estado real contra la API del proveedor. Acreditar es
+idempotente, así que da lo mismo si el webhook se reintenta o si el usuario recarga
+la pantalla de retorno. Si el aviso ya estaba destacado, los días nuevos se suman
+al final de la vigencia vigente.
+
+`PAYMENT_PROVIDER` elige el proveedor:
+
+- `dev` — aprueba el pago sin cobrar. **Solo para desarrollo**; nunca en producción.
+- `mercadopago` — crea una preferencia real vía API REST. Requiere `MP_ACCESS_TOKEN`
+  y registrar `https://tu-dominio/api/pagos/webhook` como URL de notificaciones.
+
+Para sumar **Webpay (Transbank)** basta implementar un objeto con la interfaz
+`PaymentProvider` de `src/lib/payments.ts` y registrarlo en `PROVIDERS`.
 
 ## Cómo agregar un vertical nuevo
 
@@ -84,8 +125,12 @@ src/
   components/          UI reutilizable
   lib/
     auth.ts            Sesiones y contraseñas
+    featuring.ts       Acreditación de pagos y vigencia del destacado
+    payments.ts        Proveedores de pago intercambiables
+    plans.ts           Catálogo de planes de destacado  ← oferta comercial
     prisma.ts          Cliente de base de datos
     search.ts          Traducción de query params a consultas Prisma
+    storage.ts         Procesamiento y almacenamiento de imágenes (local / S3)
     verticals.ts       Definición de atributos por vertical  ← punto de extensión
     utils.ts           Formato de precios, fechas, slugs
 ```
@@ -95,8 +140,8 @@ src/
 Cosas que la base deja preparadas pero todavía no implementa:
 
 - Verificación de correo y recuperación de contraseña.
-- Planes de pago para destacar avisos (`Listing.featuredUntil` ya existe).
+- Boleta electrónica de los pagos (hoy queda el registro en la tabla `Payment`).
+- Integración con Webpay, además de Mercado Pago.
 - Panel de administración y moderación (el modelo `Report` ya está creado).
 - Expiración automática de avisos vencidos (tarea programada sobre `expiresAt`).
-- Almacenamiento de imágenes en S3/R2 y redimensionado.
 - Búsqueda full-text en español (hoy usa `ILIKE`; el siguiente paso es `tsvector` o Meilisearch).

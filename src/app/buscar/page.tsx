@@ -56,7 +56,7 @@ export default async function SearchPage({
         publishedAt: true,
         createdAt: true,
         commune: { select: { name: true } },
-        images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
+        images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
       },
     }),
     prisma.listing.count({ where }),

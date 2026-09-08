@@ -149,9 +149,9 @@ model Listing {
   contactWhatsapp Boolean @default(false)
   allowMessages   Boolean @default(true)
 
-  /// Columna generada en Postgres (título + descripción, diccionario español y
-  /// sin tildes) para la búsqueda full-text. Prisma no la lee ni la escribe:
-  /// la crea y mantiene la base. Ver prisma/fulltext.ts.
+  /// Vector de búsqueda full-text (título + descripción, diccionario español y
+  /// sin tildes). Prisma solo declara la columna para que `db push` la conserve;
+  /// quien la llena es un trigger de Postgres. Ver prisma/fulltext.ts.
   searchVector Unsupported("tsvector")?
 
   views         Int       @default(0)
@@ -167,6 +167,7 @@ model Listing {
   conversations Conversation[]
   reports       Report[]
 
+  @@index([searchVector], type: Gin)
   @@index([status, publishedAt])
   @@index([categoryId, status])
   @@index([communeId, status])
@@ -196,14 +197,22 @@ model Favorite {
 }
 
 model SavedSearch {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  query     String
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  /// Query string de /buscar tal cual, sin el "?".
+  query  String
+
+  /// Avisar por correo cuando aparezcan avisos nuevos que calcen.
+  alerts         Boolean   @default(true)
+  /// Hasta dónde ya se avisó, para no repetir avisos en el siguiente envío.
+  lastNotifiedAt DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([alerts])
 }
 
 model Conversation {

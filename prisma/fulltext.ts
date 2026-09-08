@@ -3,24 +3,26 @@ import { PrismaClient } from "@prisma/client";
 /**
  * Prepara la búsqueda full-text en español.
  *
- * Crea (o recrea) la columna generada `searchVector` con el título y la
- * descripción del aviso, normalizados con el diccionario español y sin tildes,
- * más el índice GIN que la hace rápida.
+ * La columna `Listing.searchVector` la declara el esquema de Prisma (para que
+ * `db push` no la borre), pero quien la llena es un trigger de Postgres: title
+ * con peso A y description con peso B, con el diccionario español y sin tildes.
  *
- * Es idempotente: se puede correr las veces que haga falta. Hay que ejecutarlo
- * después de cada `npm run db:push`, porque Prisma no sabe generar columnas
- * calculadas y crea la columna vacía.
+ * Se usa un trigger y no una columna GENERATED porque Prisma no entiende las
+ * columnas calculadas e intenta convertirlas en columnas normales en cada
+ * `db push`, lo que hace fallar la sincronización del esquema.
+ *
+ * El script es idempotente y hace backfill de los avisos existentes. Correrlo
+ * después de `npm run db:push`:
  *
  *   npm run db:fulltext
  */
 
 const prisma = new PrismaClient();
 
-/// `unaccent` no es inmutable para Postgres, así que no sirve directamente en una
-/// columna generada: se envuelve en una función propia marcada como inmutable.
 const STATEMENTS = [
   `CREATE EXTENSION IF NOT EXISTS unaccent`,
 
+  // `unaccent` no es inmutable, así que se envuelve para poder usarla en índices.
   `CREATE OR REPLACE FUNCTION oktienda_unaccent(text)
      RETURNS text
      LANGUAGE sql
@@ -29,17 +31,35 @@ const STATEMENTS = [
      STRICT
    AS $$ SELECT public.unaccent('public.unaccent', $1) $$`,
 
-  `ALTER TABLE "Listing" DROP COLUMN IF EXISTS "searchVector"`,
+  `ALTER TABLE "Listing" ADD COLUMN IF NOT EXISTS "searchVector" tsvector`,
 
-  // El título pesa más que la descripción (peso A contra B).
-  `ALTER TABLE "Listing"
-     ADD COLUMN "searchVector" tsvector
-     GENERATED ALWAYS AS (
-       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce("title", ''))), 'A') ||
-       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce("description", ''))), 'B')
-     ) STORED`,
+  `CREATE OR REPLACE FUNCTION oktienda_listing_search_vector()
+     RETURNS trigger
+     LANGUAGE plpgsql
+   AS $$
+   BEGIN
+     NEW."searchVector" :=
+       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce(NEW."title", ''))), 'A') ||
+       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce(NEW."description", ''))), 'B');
+     RETURN NEW;
+   END
+   $$`,
+
+  `DROP TRIGGER IF EXISTS "listing_search_vector" ON "Listing"`,
+
+  `CREATE TRIGGER "listing_search_vector"
+     BEFORE INSERT OR UPDATE OF "title", "description" ON "Listing"
+     FOR EACH ROW
+     EXECUTE FUNCTION oktienda_listing_search_vector()`,
 
   `CREATE INDEX IF NOT EXISTS "Listing_searchVector_idx" ON "Listing" USING GIN ("searchVector")`,
+
+  // Backfill: avisos anteriores al trigger, o cuya columna quedó vacía tras un push.
+  `UPDATE "Listing"
+     SET "searchVector" =
+       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce("title", ''))), 'A') ||
+       setweight(to_tsvector('spanish', oktienda_unaccent(coalesce("description", ''))), 'B')
+   WHERE "searchVector" IS NULL`,
 ];
 
 async function main() {
@@ -47,11 +67,13 @@ async function main() {
     await prisma.$executeRawUnsafe(statement);
   }
 
-  const [{ count }] = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-    `SELECT count(*)::bigint AS count FROM "Listing" WHERE "searchVector" IS NOT NULL`,
+  const [{ indexados, total }] = await prisma.$queryRawUnsafe<{ indexados: bigint; total: bigint }[]>(
+    `SELECT count(*) FILTER (WHERE "searchVector" IS NOT NULL)::bigint AS indexados,
+            count(*)::bigint AS total
+     FROM "Listing"`,
   );
 
-  console.log(`Búsqueda full-text lista. Avisos indexados: ${count}.`);
+  console.log(`Búsqueda full-text lista. Avisos indexados: ${indexados}/${total}.`);
 }
 
 main()

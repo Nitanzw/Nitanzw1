@@ -68,3 +68,35 @@ export async function sendNewMessageEmail(
     ].join("\n"),
   });
 }
+
+export async function sendSavedSearchAlertEmail(
+  user: { name: string; email: string },
+  search: { id: string; name: string; query: string },
+  listings: { id: string; slug: string; title: string; priceLabel: string; communeName: string | null }[],
+): Promise<boolean> {
+  const site = siteUrl();
+  const lines = listings.map(
+    (listing) =>
+      `• ${listing.title} — ${listing.priceLabel}${listing.communeName ? ` (${listing.communeName})` : ""}\n  ${site}/aviso/${listing.slug}-${listing.id}`,
+  );
+
+  return sendMail({
+    to: user.email,
+    subject:
+      listings.length === 1
+        ? `Un aviso nuevo para "${search.name}"`
+        : `${listings.length} avisos nuevos para "${search.name}"`,
+    text: [
+      `Hola ${user.name.split(" ")[0]},`,
+      "",
+      `Aparecieron avisos nuevos que calzan con tu búsqueda guardada "${search.name}":`,
+      "",
+      ...lines,
+      "",
+      `Ver todos los resultados: ${site}/buscar?${search.query}`,
+      `Dejar de recibir estos avisos: ${site}/mi-cuenta/busquedas`,
+      "",
+      "— oktienda.cl",
+    ].join("\n"),
+  });
+}

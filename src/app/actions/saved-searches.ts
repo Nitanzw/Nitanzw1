@@ -40,3 +40,23 @@ export async function deleteSavedSearchAction(formData: FormData): Promise<void>
 
   revalidatePath("/mi-cuenta/busquedas");
 }
+
+/// Activa o desactiva el aviso por correo de una búsqueda guardada.
+export async function toggleSearchAlertsAction(formData: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/ingresar");
+
+  const id = String(formData.get("id") ?? "");
+  const search = await prisma.savedSearch.findFirst({
+    where: { id, userId: user.id },
+    select: { alerts: true },
+  });
+  if (!search) return;
+
+  await prisma.savedSearch.updateMany({
+    where: { id, userId: user.id },
+    data: { alerts: !search.alerts },
+  });
+
+  revalidatePath("/mi-cuenta/busquedas");
+}

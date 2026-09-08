@@ -37,6 +37,7 @@ src/lib/                 Lógica sin UI. Testeable y reutilizable.
   prisma.ts              Cliente de base de datos (singleton).
   rate-limit.ts          Límite de intentos por ventana de tiempo.
   fulltext.ts            Búsqueda full-text en español (con respaldo a ILIKE).
+  listing-query.ts       Params de /buscar → consulta Prisma (página y alertas).
   search.ts              Query params → consulta Prisma.
   storage.ts             Imágenes: procesamiento y destino (local / S3).
   tokens.ts              Tokens de un solo uso (verificación, recuperación).
@@ -129,6 +130,15 @@ export async function miAccion(_state: Estado, formData: FormData): Promise<Esta
 Si la acción puede abusarse (correos, mensajes, intentos de clave), pásala por
 `checkRateLimit`.
 
+### Reusar una búsqueda desde el servidor
+
+`resolveListingQuery()` en `src/lib/listing-query.ts` traduce los parámetros de
+/buscar a una consulta lista para Prisma, resolviendo la categoría y el full-text.
+Lo usan la página de resultados y el job de alertas: así una búsqueda guardada
+significa exactamente lo mismo en los dos lugares. Si necesitas ejecutar una
+búsqueda desde otro punto (un feed, un informe), llama a esa función en vez de
+rearmar los filtros.
+
 ### Tocar la búsqueda de texto
 
 El diccionario, los pesos y el índice viven en `prisma/fulltext.ts`; el consumo,
@@ -156,7 +166,6 @@ Vercel Cron o GitHub Actions.
 
 ## Cosas que faltan (pendientes conocidos)
 
-- Alertas por correo de las búsquedas guardadas (el modelo y la UI ya están; falta el job).
 - Ordenar por relevancia dentro de los resultados de una búsqueda de texto.
 - Boleta electrónica de los pagos.
 - Integración con Webpay.

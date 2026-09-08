@@ -71,7 +71,7 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Cuentas completas**: registro, inicio de sesión, verificación de correo,
   recuperación de contraseña y límite de intentos contra fuerza bruta.
 - **Perfil público del vendedor** con sus avisos activos y su sello de correo verificado.
-- **Búsquedas guardadas**, para repetir una búsqueda con todos sus filtros.
+- **Búsquedas guardadas** con alerta por correo cuando aparecen avisos nuevos que calzan.
 - **Denuncias y panel de administración**: métricas, moderación de avisos,
   bandeja de denuncias y gestión de roles.
 - **Expiración automática** de avisos y destacados vencidos vía `/api/cron/expirar`.
@@ -98,12 +98,16 @@ Cualquier visitante puede denunciar un aviso desde su ficha.
 
 ## Tareas programadas
 
-`/api/cron/expirar` marca vencidos los avisos pasados de fecha, apaga los
-destacados caducados y limpia tokens usados. Protégelo con `CRON_SECRET` y
-llámalo una vez al día:
+Ambas rutas se protegen con `CRON_SECRET`:
+
+| Ruta | Qué hace | Cada cuánto |
+| --- | --- | --- |
+| `/api/cron/expirar` | Vence avisos pasados de fecha, apaga destacados caducados y limpia tokens | Una vez al día |
+| `/api/cron/alertas` | Avisa por correo los avisos nuevos que calzan con una búsqueda guardada | Cada 1-6 horas |
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/expirar
+curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/alertas
 ```
 
 ## Búsqueda
@@ -212,7 +216,6 @@ src/
 
 Cosas que la base deja preparadas pero todavía no implementa:
 
-- Alertas por correo de las búsquedas guardadas (falta solo el job que las corre).
 - Boleta electrónica de los pagos (hoy queda el registro en la tabla `Payment`).
 - Integración con Webpay, además de Mercado Pago.
 - Bloqueo de usuarios desde el panel (hoy solo se moderan avisos).

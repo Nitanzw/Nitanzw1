@@ -5,16 +5,8 @@ import { ListingCard } from "@/components/listing-card";
 import { SearchFilters } from "@/components/search-filters";
 import { SaveSearch } from "@/components/save-search";
 import { getCurrentUser } from "@/lib/auth";
-import { searchListingIds } from "@/lib/fulltext";
-import {
-  PAGE_SIZE,
-  SORT_OPTIONS,
-  buildListingOrderBy,
-  buildListingWhere,
-  currentPage,
-  withParam,
-  type SearchParams,
-} from "@/lib/search";
+import { resolveListingQuery } from "@/lib/listing-query";
+import { PAGE_SIZE, SORT_OPTIONS, currentPage, withParam, type SearchParams } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -27,33 +19,14 @@ export default async function SearchPage({
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
-  const categorySlug = typeof params.categoria === "string" ? params.categoria : undefined;
 
-  const category = categorySlug
-    ? await prisma.category.findUnique({
-        where: { slug: categorySlug },
-        include: { children: { orderBy: { position: "asc" } }, parent: true },
-      })
-    : null;
-
-  const categoryIds = category
-    ? [category.id, ...category.children.map((child) => child.id)]
-    : undefined;
-
-  const q = typeof params.q === "string" ? params.q : undefined;
-  const matchedIds = q ? await searchListingIds(q) : null;
-
-  const where = buildListingWhere(params, {
-    categoryIds,
-    vertical: category?.vertical,
-    matchedIds,
-  });
+  const { where, orderBy, category } = await resolveListingQuery(params);
   const page = currentPage(params);
 
   const [listings, total, rootCategories, regions, communes] = await Promise.all([
     prisma.listing.findMany({
       where,
-      orderBy: buildListingOrderBy(params),
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       select: {

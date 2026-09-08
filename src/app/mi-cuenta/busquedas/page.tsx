@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Search, Trash2 } from "lucide-react";
+import { Bell, BellOff, Search, Trash2 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { formatRelativeDate } from "@/lib/utils";
-import { deleteSavedSearchAction } from "@/app/actions/saved-searches";
+import { deleteSavedSearchAction, toggleSearchAlertsAction } from "@/app/actions/saved-searches";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Búsquedas guardadas" };
@@ -22,6 +22,7 @@ export default async function SavedSearchesPage() {
         <p className="font-semibold text-ink-900">No tienes búsquedas guardadas</p>
         <p className="mt-1 text-sm text-ink-500">
           Aplica los filtros que te interesan y toca “Guardar búsqueda” en los resultados.
+          Te avisamos por correo cuando aparezcan avisos nuevos que calcen.
         </p>
         <Link
           href="/buscar"
@@ -36,7 +37,7 @@ export default async function SavedSearchesPage() {
   return (
     <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
       {searches.map((search) => (
-        <div key={search.id} className="flex items-center gap-3 p-4">
+        <div key={search.id} className="flex items-center gap-2 p-4">
           <Search className="size-5 shrink-0 text-ink-500" />
           <div className="min-w-0 flex-1">
             <Link href={`/buscar?${search.query}`} className="font-medium text-ink-900 hover:text-brand-700">
@@ -44,8 +45,23 @@ export default async function SavedSearchesPage() {
             </Link>
             <p className="truncate text-xs text-ink-500">
               Guardada {formatRelativeDate(search.createdAt)}
+              {search.alerts ? " · te avisamos por correo" : " · sin avisos"}
             </p>
           </div>
+          <form action={toggleSearchAlertsAction}>
+            <input type="hidden" name="id" value={search.id} />
+            <button
+              className={`rounded-lg border p-2 ${
+                search.alerts
+                  ? "border-brand-200 bg-brand-50 text-brand-700"
+                  : "border-slate-200 text-ink-500 hover:bg-slate-50"
+              }`}
+              aria-label={search.alerts ? `Desactivar avisos de ${search.name}` : `Activar avisos de ${search.name}`}
+              title={search.alerts ? "Avisos activados" : "Avisos desactivados"}
+            >
+              {search.alerts ? <Bell className="size-4" /> : <BellOff className="size-4" />}
+            </button>
+          </form>
           <form action={deleteSavedSearchAction}>
             <input type="hidden" name="id" value={search.id} />
             <button

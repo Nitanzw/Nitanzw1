@@ -12,6 +12,9 @@ import { Gallery } from "@/components/gallery";
 import { ContactSeller } from "@/components/contact-seller";
 import { ListingCard } from "@/components/listing-card";
 import { ReportListing } from "@/components/report-listing";
+import { ReputationBadge } from "@/components/rating-stars";
+import { reputationOf } from "@/lib/reputation";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +25,17 @@ async function getListing(param: string) {
       images: { orderBy: { position: "asc" } },
       category: { include: { parent: true } },
       commune: { include: { region: true } },
-      user: { select: { id: true, name: true, avatarUrl: true, emailVerified: true, createdAt: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          emailVerified: true,
+          createdAt: true,
+          ratingCount: true,
+          ratingSum: true,
+        },
+      },
     },
   });
 }
@@ -194,6 +207,11 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
                 </p>
                 {listing.user.emailVerified && (
                   <p className="text-xs font-medium text-brand-700">Correo verificado</p>
+                )}
+                {features.reviews && (
+                  <div className="mt-1">
+                    <ReputationBadge reputation={reputationOf(listing.user)} />
+                  </div>
                 )}
               </div>
             </div>

@@ -56,6 +56,12 @@ enum TokenType {
   PASSWORD_RESET
 }
 
+/// Rol de quien escribe la calificación en ese trato.
+enum ReviewRole {
+  BUYER
+  SELLER
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -85,6 +91,13 @@ model User {
   reports               Report[]
   payments              Payment[]
   tokens                Token[]
+  reviewsWritten        Review[]       @relation("ReviewAuthor")
+  reviewsReceived       Review[]       @relation("ReviewSubject")
+
+  /// Reputación denormalizada, para no sumar calificaciones en cada listado.
+  /// La recalcula src/lib/reputation.ts cada vez que cambia una reseña.
+  ratingCount Int @default(0)
+  ratingSum   Int @default(0)
 }
 
 /// Árbol de categorías. `vertical` decide qué atributos extra pide el formulario.
@@ -162,6 +175,7 @@ model Listing {
   updatedAt     DateTime  @updatedAt
 
   images        ListingImage[]
+  reviews       Review[]
   payments      Payment[]
   favorites     Favorite[]
   conversations Conversation[]
@@ -226,6 +240,7 @@ model Conversation {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
+  reviews   Review[]
 
   @@unique([listingId, buyerId])
   @@index([sellerId])
@@ -301,4 +316,40 @@ model Token {
   createdAt DateTime  @default(now())
 
   @@index([userId, type])
+}
+
+/// Calificación entre dos personas después de un contacto real.
+///
+/// Va siempre atada a la conversación que las puso en contacto: sin conversación
+/// no hay calificación, y cada participante puede dejar una sola. Es lo que evita
+/// que se inventen reseñas para inflar (o hundir) la reputación de alguien.
+model Review {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  listingId      String
+  listing        Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  authorId  String
+  author    User       @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   User       @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  role      ReviewRole
+
+  /// De 1 a 5 estrellas.
+  rating   Int
+  comment  String?
+  /// Si el trato se concretó. Una mala nota sin trato pesa distinto que una con trato.
+  dealDone Boolean @default(true)
+
+  /// Respuesta pública de quien fue calificado. Una sola, para dar derecho a réplica.
+  reply     String?
+  repliedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([conversationId, authorId])
+  @@index([subjectId, createdAt])
+  @@index([listingId])
 }

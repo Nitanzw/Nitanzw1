@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { ListingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { recalculateReputation } from "@/lib/reviews";
 
 /// Todas las acciones de administración pasan por acá: sin rol ADMIN no se ejecuta nada.
 async function requireAdmin() {
@@ -57,4 +58,21 @@ export async function setUserRoleAction(formData: FormData): Promise<void> {
 
   await prisma.user.update({ where: { id }, data: { role } }).catch(() => {});
   revalidatePath("/admin/usuarios");
+}
+
+/// Elimina una calificación abusiva y deja la reputación consistente.
+export async function deleteReviewAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const review = await prisma.review.findUnique({ where: { id }, select: { subjectId: true } });
+  if (!review) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.review.delete({ where: { id } });
+    await recalculateReputation(review.subjectId, tx);
+  });
+
+  revalidatePath("/admin/calificaciones");
+  revalidatePath(`/vendedor/${review.subjectId}`);
 }

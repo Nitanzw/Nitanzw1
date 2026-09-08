@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { confirmPayment, failPayment } from "@/lib/featuring";
 import { fetchMercadoPagoPayment } from "@/lib/payments";
+import { features } from "@/lib/features";
 
 /**
  * Webhook de notificaciones del proveedor de pago.
@@ -11,6 +12,10 @@ import { fetchMercadoPagoPayment } from "@/lib/payments";
  * proveedor no la reintente en bucle.
  */
 export async function POST(request: Request) {
+  if (!features.payments) {
+    return NextResponse.json({ error: "No disponible" }, { status: 404 });
+  }
+
   let body: { type?: string; action?: string; data?: { id?: string } };
   try {
     body = await request.json();

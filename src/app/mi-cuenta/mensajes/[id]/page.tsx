@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { formatRelativeDate, listingHref } from "@/lib/utils";
 import { ReplyForm } from "@/components/reply-form";
+import { ReviewForm } from "@/components/review-form";
+import { RatingStars } from "@/components/rating-stars";
+import { features } from "@/lib/features";
+import { reviewTargetFor } from "@/lib/reviews";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Conversación" };
@@ -33,6 +37,19 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   });
 
   const other = conversation.buyerId === user.id ? conversation.seller : conversation.buyer;
+
+  // Solo aparece si esta persona participó, hubo mensajes y todavía no calificó.
+  const reviewTarget = features.reviews ? await reviewTargetFor(conversation.id, user.id) : null;
+
+  // Si ya calificó, se muestra su calificación: el formulario desaparece tras
+  // enviarla y sin esto no quedaría ninguna señal de que se guardó.
+  const ownReview =
+    features.reviews && !reviewTarget
+      ? await prisma.review.findFirst({
+          where: { conversationId: conversation.id, authorId: user.id },
+          select: { rating: true, comment: true, createdAt: true },
+        })
+      : null;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -69,6 +86,28 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       <div className="rounded-b-xl border border-slate-200 bg-white p-4">
         <ReplyForm conversationId={conversation.id} />
       </div>
+
+      {reviewTarget && (
+        <div className="mt-4">
+          <ReviewForm
+            conversationId={conversation.id}
+            subjectName={reviewTarget.subjectName}
+            role={reviewTarget.role}
+          />
+        </div>
+      )}
+
+      {ownReview && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <RatingStars rating={ownReview.rating} />
+            <span className="text-sm text-ink-700">
+              Calificaste a {other.name} {formatRelativeDate(ownReview.createdAt)}
+            </span>
+          </div>
+          {ownReview.comment && <p className="mt-2 text-sm text-ink-500">“{ownReview.comment}”</p>}
+        </div>
+      )}
     </div>
   );
 }

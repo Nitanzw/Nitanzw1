@@ -31,10 +31,13 @@ src/lib/                 Lógica sin UI. Testeable y reutilizable.
   auth.ts                Sesión (JWT en cookie httpOnly) y contraseñas.
   emails.ts              Plantillas de correos transaccionales.
   featuring.ts           Acreditación de pagos y vigencia de destacados.
+  features.ts            Interruptores de funcionalidades.
   mail.ts                Envío de correo: console / smtp / resend.
   payments.ts            Proveedores de pago: dev / mercadopago.
   plans.ts               Catálogo de planes de destacado.
   prisma.ts              Cliente de base de datos (singleton).
+  reputation.ts          Cálculo del promedio de calificaciones (sin base).
+  reviews.ts             Quién puede calificar a quién, y recálculo de reputación.
   rate-limit.ts          Límite de intentos por ventana de tiempo.
   fulltext.ts            Búsqueda full-text en español (con respaldo a ILIKE).
   listing-query.ts       Params de /buscar → consulta Prisma (página y alertas).
@@ -100,6 +103,23 @@ llega en el cuerpo de la notificación**: consulta el estado contra el proveedor
 
 Mismo patrón: `TRANSPORTS` en `src/lib/mail.ts`, y el `driver()` de
 `src/lib/storage.ts`. Ambos se eligen por variable de entorno.
+
+### Apagar o encender una funcionalidad
+
+`src/lib/features.ts` define las banderas. Una funcionalidad apagada debe
+desaparecer en **todos** sus bordes, no solo del menú: la página (con
+`notFound()`), la Server Action y la ruta de API. Así, apagarla no deja
+puertas traseras abiertas.
+
+Al agregar una bandera nueva, documéntala en `.env.example` y en el README.
+
+### Cuidado con `loading.tsx` y los 404
+
+Un `loading.tsx` crea un límite de streaming: Next empieza a enviar la respuesta
+antes de que la página decida, y entonces un `notFound()` posterior ya no puede
+cambiar el status y devuelve 200. Por eso el esqueleto de carga vive en
+`src/app/buscar/`, y no en la raíz. Si agregas uno, comprueba que las rutas que
+pueden no existir sigan respondiendo 404.
 
 ### Agregar una página
 
@@ -169,4 +189,5 @@ Vercel Cron o GitHub Actions.
 - Ordenar por relevancia dentro de los resultados de una búsqueda de texto.
 - Boleta electrónica de los pagos.
 - Integración con Webpay.
-- Bloqueo de usuarios en el panel de administración (hoy solo se moderan avisos).
+- Bloqueo de usuarios en el panel de administración (hoy se moderan avisos y calificaciones).
+- Que una calificación muy baja avise al equipo de moderación.

@@ -13,7 +13,7 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 | Base de datos | PostgreSQL + Prisma |
 | Sesiones | JWT propio firmado con `jose`, en cookie httpOnly |
 | Imágenes | `sharp` (WebP + miniatura) sobre disco local o S3/R2 |
-| Pagos | Capa propia con proveedores intercambiables (`dev`, Mercado Pago) |
+| Pagos | Capa propia con proveedores intercambiables (apagada por bandera) |
 | Correo | `console` / SMTP / Resend, detrás de una misma interfaz |
 | Calidad | ESLint, tests con `node:test` y CI en GitHub Actions |
 
@@ -33,6 +33,7 @@ Cuentas que crea el seed:
 | Cuenta | Correo | Clave |
 | --- | --- | --- |
 | Vendedor demo | `demo@oktienda.cl` | `oktienda123` |
+| Compradora demo | `compradora@oktienda.cl` | `oktienda123` |
 | Administrador | `admin@oktienda.cl` | `oktienda123` |
 
 Cambia la clave del administrador en producción con `SEED_ADMIN_PASSWORD`.
@@ -66,8 +67,10 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Cuenta**: mis avisos (pausar / reactivar / marcar vendido / eliminar), favoritos,
   mensajes y perfil con cambio de contraseña.
 - **Mensajería** comprador ↔ vendedor por aviso.
-- **Destacados pagados**: catálogo de planes, checkout, acreditación por webhook
-  y vigencia acumulable en `Listing.featuredUntil`.
+- **Calificaciones entre usuarios** después de un contacto real, con derecho a
+  réplica y moderación: la defensa contra estafas.
+- **Destacados pagados** listos pero **apagados** (`FEATURE_PAYMENTS`): catálogo
+  de planes, checkout, acreditación por webhook y vigencia acumulable.
 - **Cuentas completas**: registro, inicio de sesión, verificación de correo,
   recuperación de contraseña y límite de intentos contra fuerza bruta.
 - **Perfil público del vendedor** con sus avisos activos y su sello de correo verificado.
@@ -89,6 +92,39 @@ punto de extensión, y casi ninguno requiere tocar la base de datos.
 `MAIL_DRIVER` elige el transporte: `console` (escribe el correo en el log, ideal
 en desarrollo), `smtp` (cualquier servidor SMTP) o `resend`. Los correos
 transaccionales viven en `src/lib/emails.ts`.
+
+## Calificaciones y confianza
+
+oktienda.cl es hoy un marketplace de **contactos**: no se cobra ni se procesan
+pagos, así que la protección contra estafas es la reputación.
+
+La regla que la sostiene: **solo puede calificar quien conversó de verdad**. Una
+calificación va siempre atada a la conversación que puso en contacto a las dos
+personas, y cada participante deja una sola. Sin contacto previo no hay reseña
+posible, lo que hace caro fabricar reputación falsa.
+
+- Comprador y vendedor se califican entre sí (1 a 5 estrellas, comentario
+  opcional y si el trato se concretó).
+- Quien recibe una calificación tiene **derecho a réplica**: una respuesta
+  pública que se muestra junto a ella.
+- El promedio se muestra en la ficha del aviso y en el perfil del vendedor.
+- Un administrador puede eliminar una calificación abusiva desde
+  `/admin/calificaciones`; la reputación se recalcula sola.
+
+## Funcionalidades apagadas
+
+`src/lib/features.ts` permite dejar código completo pero apagado en producción,
+sin ramas paralelas ni borrar nada:
+
+| Bandera | Por defecto | Qué controla |
+| --- | --- | --- |
+| `FEATURE_PAYMENTS` | `off` | Pantalla de destacar, checkout y webhook de pagos |
+| `FEATURE_REVIEWS` | `on` | Calificaciones entre usuarios |
+
+Con los pagos apagados, `/destacar` responde 404 y no se ofrece por ninguna
+parte, pero los avisos que ya tengan `featuredUntil` vigente se siguen
+mostrando destacados. Para encenderlos: `FEATURE_PAYMENTS="on"` y un
+`PAYMENT_PROVIDER` real.
 
 ## Moderación
 
@@ -216,8 +252,7 @@ src/
 
 Cosas que la base deja preparadas pero todavía no implementa:
 
-- Boleta electrónica de los pagos (hoy queda el registro en la tabla `Payment`).
-- Integración con Webpay, además de Mercado Pago.
+- Boleta electrónica y Webpay, para cuando se enciendan los pagos.
 - Bloqueo de usuarios desde el panel (hoy solo se moderan avisos).
 - Ordenar los resultados por relevancia (hoy el full-text decide qué coincide y el
   orden sigue siendo destacados / fecha / precio).

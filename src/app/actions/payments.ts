@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { findPlan } from "@/lib/plans";
 import { paymentProvider } from "@/lib/payments";
+import { features } from "@/lib/features";
 
 export type CheckoutState = { error?: string } | undefined;
 
@@ -13,6 +14,8 @@ export async function startCheckoutAction(
   _state: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
+  if (!features.payments) return { error: "Los destacados pagados no están disponibles por ahora" };
+
   const user = await getCurrentUser();
   if (!user) redirect("/ingresar");
 

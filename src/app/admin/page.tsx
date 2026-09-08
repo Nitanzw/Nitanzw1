@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Administración" };
@@ -9,7 +10,7 @@ export const metadata: Metadata = { title: "Administración" };
 export default async function AdminHomePage() {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [users, active, paused, pendingReports, featured, revenue, newListings] = await Promise.all([
+  const [users, active, paused, pendingReports, featured, revenue, newListings, reviews, badReviews] = await Promise.all([
     prisma.user.count(),
     prisma.listing.count({ where: { status: "ACTIVE" } }),
     prisma.listing.count({ where: { status: { in: ["PAUSED", "EXPIRED", "REJECTED"] } } }),
@@ -17,6 +18,8 @@ export default async function AdminHomePage() {
     prisma.listing.count({ where: { featuredUntil: { gt: new Date() } } }),
     prisma.payment.aggregate({ _sum: { amount: true }, where: { status: "PAID", paidAt: { gte: since } } }),
     prisma.listing.count({ where: { createdAt: { gte: since } } }),
+    prisma.review.count(),
+    prisma.review.count({ where: { rating: { lte: 2 } } }),
   ]);
 
   const cards = [
@@ -25,7 +28,11 @@ export default async function AdminHomePage() {
     { label: "Avisos pausados o vencidos", value: String(paused) },
     { label: "Avisos nuevos (30 días)", value: String(newListings) },
     { label: "Avisos destacados vigentes", value: String(featured) },
-    { label: "Ingresos por destacados (30 días)", value: formatPrice(revenue._sum.amount ?? 0) },
+    { label: "Calificaciones publicadas", value: String(reviews) },
+    { label: "Calificaciones de 1 o 2 estrellas", value: String(badReviews) },
+    ...(features.payments
+      ? [{ label: "Ingresos por destacados (30 días)", value: formatPrice(revenue._sum.amount ?? 0) }]
+      : []),
   ];
 
   return (

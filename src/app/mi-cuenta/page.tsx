@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { formatPrice, formatRelativeDate, listingHref } from "@/lib/utils";
 import { updateListingStatusAction } from "@/app/actions/listings";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Mis avisos" };
@@ -89,12 +90,14 @@ export default async function MyListingsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/destacar/${listing.id}`}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-            >
-              {listing.featuredUntil && listing.featuredUntil > new Date() ? "Extender destacado" : "Destacar"}
-            </Link>
+            {features.payments && (
+              <Link
+                href={`/destacar/${listing.id}`}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                {listing.featuredUntil && listing.featuredUntil > new Date() ? "Extender destacado" : "Destacar"}
+              </Link>
+            )}
             {listing.status === "ACTIVE" ? (
               <StatusButton id={listing.id} action="pause" label="Pausar" />
             ) : (

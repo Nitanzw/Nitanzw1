@@ -251,9 +251,71 @@ async function main() {
     });
   }
 
+  console.log("Creando conversaciones y calificaciones de ejemplo…");
+  const compradora = await prisma.user.upsert({
+    where: { email: "compradora@oktienda.cl" },
+    update: {},
+    create: {
+      email: "compradora@oktienda.cl",
+      name: "Camila Rojas",
+      emailVerified: new Date(),
+      passwordHash: await bcrypt.hash("oktienda123", 12),
+    },
+  });
+
+  // Una calificación solo puede existir sobre una conversación real: el seed
+  // arma el contacto completo (conversación + mensaje) antes de calificar.
+  const primerAviso = await prisma.listing.findFirst({ where: { userId: demo.id }, orderBy: { createdAt: "asc" } });
+  if (primerAviso) {
+    const conversation = await prisma.conversation.upsert({
+      where: { listingId_buyerId: { listingId: primerAviso.id, buyerId: compradora.id } },
+      update: {},
+      create: { listingId: primerAviso.id, buyerId: compradora.id, sellerId: demo.id },
+    });
+
+    const tieneMensajes = await prisma.message.count({ where: { conversationId: conversation.id } });
+    if (tieneMensajes === 0) {
+      await prisma.message.create({
+        data: { conversationId: conversation.id, senderId: compradora.id, body: "Hola, ¿sigue disponible?" },
+      });
+      await prisma.message.create({
+        data: { conversationId: conversation.id, senderId: demo.id, body: "Sí, disponible. ¿Cuándo lo pasas a ver?" },
+      });
+    }
+
+    const yaCalificado = await prisma.review.findFirst({
+      where: { conversationId: conversation.id, authorId: compradora.id },
+    });
+    if (!yaCalificado) {
+      await prisma.review.create({
+        data: {
+          conversationId: conversation.id,
+          listingId: primerAviso.id,
+          authorId: compradora.id,
+          subjectId: demo.id,
+          role: "BUYER",
+          rating: 5,
+          comment: "Respondió al tiro y el auto estaba tal cual la descripción. Recomendado.",
+          dealDone: true,
+        },
+      });
+
+      const resumen = await prisma.review.aggregate({
+        where: { subjectId: demo.id },
+        _count: { _all: true },
+        _sum: { rating: true },
+      });
+      await prisma.user.update({
+        where: { id: demo.id },
+        data: { ratingCount: resumen._count._all, ratingSum: resumen._sum.rating ?? 0 },
+      });
+    }
+  }
+
   console.log("Listo.");
   console.log("  Vendedor demo: demo@oktienda.cl / oktienda123");
   console.log(`  Administrador: ${adminEmail} / ${process.env.SEED_ADMIN_PASSWORD ?? "oktienda123"}`);
+  console.log("  Compradora:    compradora@oktienda.cl / oktienda123");
 }
 
 main()

@@ -3,6 +3,10 @@ import type { Metadata } from "next";
 import { BadgeCheck, CalendarDays, Package } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ListingCard } from "@/components/listing-card";
+import { ReputationBadge } from "@/components/rating-stars";
+import { ReviewList } from "@/components/review-list";
+import { reputationOf } from "@/lib/reputation";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +26,8 @@ async function getSeller(id: string) {
       bio: true,
       emailVerified: true,
       createdAt: true,
+      ratingCount: true,
+      ratingSum: true,
       listings: {
         where: { status: "ACTIVE" },
         orderBy: [{ featuredUntil: "desc" }, { publishedAt: "desc" }],
@@ -29,6 +35,21 @@ async function getSeller(id: string) {
         select: CARD_SELECT,
       },
       _count: { select: { listings: { where: { status: "ACTIVE" } } } },
+      reviewsReceived: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          dealDone: true,
+          reply: true,
+          createdAt: true,
+          role: true,
+          author: { select: { id: true, name: true } },
+          listing: { select: { id: true, slug: true, title: true } },
+        },
+      },
     },
   });
 }
@@ -62,7 +83,12 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
               </span>
             )}
           </h1>
-          {seller.bio && <p className="mt-1 max-w-2xl text-sm text-ink-700">{seller.bio}</p>}
+          {features.reviews && (
+            <div className="mt-1">
+              <ReputationBadge reputation={reputationOf(seller)} size="md" />
+            </div>
+          )}
+          {seller.bio && <p className="mt-2 max-w-2xl text-sm text-ink-700">{seller.bio}</p>}
           <div className="mt-2 flex flex-wrap gap-4 text-sm text-ink-500">
             <span className="flex items-center gap-1">
               <Package className="size-4" /> {seller._count.listings} avisos activos
@@ -74,6 +100,17 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       </header>
+
+      {features.reviews && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-ink-900">
+            Calificaciones ({seller.reviewsReceived.length})
+          </h2>
+          <div className="mt-4">
+            <ReviewList reviews={seller.reviewsReceived} />
+          </div>
+        </section>
+      )}
 
       <h2 className="mt-8 text-lg font-bold text-ink-900">Sus publicaciones</h2>
       {seller.listings.length === 0 ? (

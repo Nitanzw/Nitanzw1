@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { MessagesSquare, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ListingCard } from "@/components/listing-card";
 import { CategoryIcon } from "@/components/category-icon";
 import { HomeSearch } from "@/components/home-search";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -127,7 +128,9 @@ export default async function HomePage() {
           {[
             { icon: Zap, title: "Publica en 2 minutos", text: "Sin comisiones ni intermediarios: tu aviso queda online al instante." },
             { icon: ShieldCheck, title: "Contacto directo y seguro", text: "Chat interno o WhatsApp. Tus datos personales quedan protegidos." },
-            { icon: Sparkles, title: "Destaca cuando quieras", text: "Impulsa tu aviso al tope de los resultados y véndelo más rápido." },
+            features.payments
+              ? { icon: Sparkles, title: "Destaca cuando quieras", text: "Impulsa tu aviso al tope de los resultados y véndelo más rápido." }
+              : { icon: MessagesSquare, title: "Vende con reputación", text: "Cada trato se califica, así sabes con quién estás tratando antes de contactar." },
           ].map((item) => (
             <div key={item.title} className="rounded-xl border border-slate-200 bg-white p-5">
               <item.icon className="size-6 text-brand-600" />

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { features } from "@/lib/features";
 import { PLANS } from "@/lib/plans";
 import { formatPrice, listingHref } from "@/lib/utils";
 import { PlanPicker } from "@/components/plan-picker";
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Destacar aviso" };
 
 export default async function FeaturePage({ params }: { params: Promise<{ id: string }> }) {
+  // Con los pagos apagados la ruta no existe para nadie.
+  if (!features.payments) notFound();
+
   const { id } = await params;
   const user = await getCurrentUser();
   if (!user) redirect(`/ingresar?next=${encodeURIComponent(`/destacar/${id}`)}`);

@@ -96,3 +96,29 @@ describe("withParam", () => {
     assert.equal(query.includes("pagina"), false);
   });
 });
+
+describe("texto libre", () => {
+  it("usa los ids de la búsqueda full-text cuando están disponibles", () => {
+    const found = conditions(buildListingWhere({ q: "camion" }, { matchedIds: ["a", "b"] }));
+    assert.deepEqual(found, [{ id: { in: ["a", "b"] } }]);
+  });
+
+  it("sin resultados full-text no devuelve avisos", () => {
+    const found = conditions(buildListingWhere({ q: "camion" }, { matchedIds: [] }));
+    assert.deepEqual(found, [{ id: { in: [] } }]);
+  });
+
+  it("cae a la coincidencia por subcadena si no hay full-text", () => {
+    const [first] = conditions(buildListingWhere({ q: "camion" }, { matchedIds: null }));
+    assert.deepEqual(first, {
+      OR: [
+        { title: { contains: "camion", mode: "insensitive" } },
+        { description: { contains: "camion", mode: "insensitive" } },
+      ],
+    });
+  });
+
+  it("ignora matchedIds cuando no hay texto buscado", () => {
+    assert.deepEqual(conditions(buildListingWhere({}, { matchedIds: ["a"] })), []);
+  });
+});

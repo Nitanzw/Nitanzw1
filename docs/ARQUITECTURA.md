@@ -25,6 +25,7 @@ de improvisar una estructura nueva.
 ```
 prisma/schema.prisma     Modelo de datos. Fuente de verdad de los tipos.
 prisma/seed.ts           Regiones, comunas, categorías, cuentas demo y admin.
+prisma/fulltext.ts       Columna generada e índice GIN de la búsqueda.
 
 src/lib/                 Lógica sin UI. Testeable y reutilizable.
   auth.ts                Sesión (JWT en cookie httpOnly) y contraseñas.
@@ -35,6 +36,7 @@ src/lib/                 Lógica sin UI. Testeable y reutilizable.
   plans.ts               Catálogo de planes de destacado.
   prisma.ts              Cliente de base de datos (singleton).
   rate-limit.ts          Límite de intentos por ventana de tiempo.
+  fulltext.ts            Búsqueda full-text en español (con respaldo a ILIKE).
   search.ts              Query params → consulta Prisma.
   storage.ts             Imágenes: procesamiento y destino (local / S3).
   tokens.ts              Tokens de un solo uso (verificación, recuperación).
@@ -127,6 +129,14 @@ export async function miAccion(_state: Estado, formData: FormData): Promise<Esta
 Si la acción puede abusarse (correos, mensajes, intentos de clave), pásala por
 `checkRateLimit`.
 
+### Tocar la búsqueda de texto
+
+El diccionario, los pesos y el índice viven en `prisma/fulltext.ts`; el consumo,
+en `src/lib/fulltext.ts`. Si cambias la definición de la columna, corre
+`npm run db:fulltext` de nuevo: el script la recrea. Los filtros estructurados
+(categoría, precio, comuna, atributos del vertical) siguen resolviéndose en
+`src/lib/search.ts` sobre los candidatos que devuelve el full-text.
+
 ### Agregar una tarea programada
 
 Crea una ruta bajo `src/app/api/cron/` con el mismo guardia de `CRON_SECRET` que
@@ -140,14 +150,14 @@ Vercel Cron o GitHub Actions.
 | Sesión propia con JWT en cookie, sin librería de auth | Menos dependencias y control total sobre el flujo; el proyecto no necesita OAuth todavía. |
 | Atributos en JSON en vez de tablas por vertical | Sumar verticales no debe implicar migraciones ni joins nuevos. |
 | Server Actions en vez de API REST | Una sola capa que mantener; la validación vive junto al uso. |
-| Búsqueda con `ILIKE` | Suficiente para el catálogo inicial; migrar a `tsvector` o Meilisearch cuando crezca. |
+| Búsqueda con `tsvector` generado en Postgres | Resuelve tildes y plurales con un índice GIN, sin sumar un servicio externo como Meilisearch. |
 | Límite de intentos en memoria | Suficiente para una instancia. Con varias, reemplazar por Redis en `rate-limit.ts`. |
 | Imágenes procesadas al subir | Evita depender de un servicio de transformación y abarata el CDN. |
 
 ## Cosas que faltan (pendientes conocidos)
 
 - Alertas por correo de las búsquedas guardadas (el modelo y la UI ya están; falta el job).
+- Ordenar por relevancia dentro de los resultados de una búsqueda de texto.
 - Boleta electrónica de los pagos.
 - Integración con Webpay.
-- Búsqueda full-text en español.
 - Bloqueo de usuarios en el panel de administración (hoy solo se moderan avisos).

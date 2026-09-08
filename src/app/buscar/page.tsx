@@ -5,6 +5,7 @@ import { ListingCard } from "@/components/listing-card";
 import { SearchFilters } from "@/components/search-filters";
 import { SaveSearch } from "@/components/save-search";
 import { getCurrentUser } from "@/lib/auth";
+import { searchListingIds } from "@/lib/fulltext";
 import {
   PAGE_SIZE,
   SORT_OPTIONS,
@@ -39,7 +40,14 @@ export default async function SearchPage({
     ? [category.id, ...category.children.map((child) => child.id)]
     : undefined;
 
-  const where = buildListingWhere(params, { categoryIds, vertical: category?.vertical });
+  const q = typeof params.q === "string" ? params.q : undefined;
+  const matchedIds = q ? await searchListingIds(q) : null;
+
+  const where = buildListingWhere(params, {
+    categoryIds,
+    vertical: category?.vertical,
+    matchedIds,
+  });
   const page = currentPage(params);
 
   const [listings, total, rootCategories, regions, communes] = await Promise.all([

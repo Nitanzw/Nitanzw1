@@ -23,6 +23,7 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 npm install
 cp .env.example .env          # completa DATABASE_URL y AUTH_SECRET
 npm run db:push               # crea las tablas
+npm run db:fulltext           # prepara la búsqueda en español
 npm run db:seed               # regiones, comunas, categorías y avisos demo
 npm run dev                   # http://localhost:3000
 ```
@@ -48,6 +49,7 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitarios de `src/lib` |
 | `npm run db:push` | Sincroniza el esquema con la base |
+| `npm run db:fulltext` | Crea la columna e índice de búsqueda full-text |
 | `npm run db:migrate` | Crea una migración versionada |
 | `npm run db:seed` | Carga datos iniciales |
 | `npm run db:studio` | Explorador visual de la base |
@@ -55,8 +57,9 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 ## Qué incluye esta base
 
 - **Home** con buscador, categorías, avisos destacados y recientes.
-- **Búsqueda** con filtros de categoría, región/comuna, precio, estado, solo-con-foto,
-  orden y paginación — más los filtros propios de cada vertical.
+- **Búsqueda** full-text en español (encuentra "único dueño" buscando "unico dueno",
+  y "departamento" buscando "departamentos"), con filtros de categoría, región/comuna,
+  precio, estado, solo-con-foto, orden y paginación — más los filtros de cada vertical.
 - **Ficha del aviso**: galería, características del vertical, contacto por teléfono/WhatsApp,
   chat interno, favoritos, avisos similares y bloque de consejos de seguridad.
 - **Publicación** en un formulario que cambia según la categoría elegida, con subida de hasta 10 fotos.
@@ -102,6 +105,16 @@ llámalo una vez al día:
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/expirar
 ```
+
+## Búsqueda
+
+El texto libre se resuelve con una columna `tsvector` generada por Postgres sobre
+el título y la descripción, con el diccionario español y sin tildes, más un índice
+GIN. La crea `npm run db:fulltext`, que hay que correr **después de cada
+`npm run db:push`** porque Prisma no genera columnas calculadas.
+
+Si esa columna no existe, la búsqueda cae sola a una coincidencia por subcadena y
+avisa en el log: un despliegue al que se le olvidó el paso sigue funcionando.
 
 ## Calidad
 
@@ -203,4 +216,5 @@ Cosas que la base deja preparadas pero todavía no implementa:
 - Boleta electrónica de los pagos (hoy queda el registro en la tabla `Payment`).
 - Integración con Webpay, además de Mercado Pago.
 - Bloqueo de usuarios desde el panel (hoy solo se moderan avisos).
-- Búsqueda full-text en español (hoy usa `ILIKE`; el siguiente paso es `tsvector` o Meilisearch).
+- Ordenar los resultados por relevancia (hoy el full-text decide qué coincide y el
+  orden sigue siendo destacados / fecha / precio).

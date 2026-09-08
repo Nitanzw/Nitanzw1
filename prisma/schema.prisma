@@ -149,6 +149,11 @@ model Listing {
   contactWhatsapp Boolean @default(false)
   allowMessages   Boolean @default(true)
 
+  /// Columna generada en Postgres (título + descripción, diccionario español y
+  /// sin tildes) para la búsqueda full-text. Prisma no la lee ni la escribe:
+  /// la crea y mantiene la base. Ver prisma/fulltext.ts.
+  searchVector Unsupported("tsvector")?
+
   views         Int       @default(0)
   featuredUntil DateTime?
   publishedAt   DateTime?

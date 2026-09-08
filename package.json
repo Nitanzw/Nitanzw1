@@ -10,6 +10,7 @@
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
+    "db:fulltext": "tsx prisma/fulltext.ts",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",

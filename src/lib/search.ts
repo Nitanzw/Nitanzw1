@@ -26,25 +26,35 @@ function toInt(value: string | undefined): number | undefined {
 
 /**
  * Traduce los query params de /buscar a un `where` de Prisma.
+ *
+ * El texto libre lo resuelve la búsqueda full-text (src/lib/fulltext.ts), que
+ * entrega los ids candidatos en `matchedIds`; si no está disponible, este
+ * módulo cae por su cuenta a una coincidencia por subcadena.
  * Los filtros propios de cada vertical (año, dormitorios, etc.) se resuelven
  * contra la columna JSON `attributes`, por lo que un vertical nuevo queda
  * filtrable con solo declararlo en src/lib/verticals.ts.
  */
 export function buildListingWhere(
   params: SearchParams,
-  options: { categoryIds?: string[]; vertical?: Vertical } = {},
+  options: { categoryIds?: string[]; vertical?: Vertical; matchedIds?: string[] | null } = {},
 ): Prisma.ListingWhereInput {
   const where: Prisma.ListingWhereInput = { status: "ACTIVE" };
   const and: Prisma.ListingWhereInput[] = [];
 
   const q = first(params.q);
   if (q) {
-    and.push({
-      OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-      ],
-    });
+    if (options.matchedIds) {
+      // La búsqueda full-text ya resolvió qué avisos coinciden con el texto.
+      and.push({ id: { in: options.matchedIds } });
+    } else {
+      // Sin columna full-text disponible: coincidencia simple por subcadena.
+      and.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
   }
 
   if (options.categoryIds?.length) {

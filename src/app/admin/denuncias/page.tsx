@@ -21,6 +21,7 @@ export default async function ReportsPage({
     take: 100,
     include: {
       listing: { select: { id: true, slug: true, title: true, status: true } },
+      subject: { select: { id: true, name: true, email: true, blockedAt: true } },
       user: { select: { name: true, email: true } },
     },
   });
@@ -52,26 +53,50 @@ export default async function ReportsPage({
             <div key={report.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-ink-900">{report.reason}</p>
-                  <Link href={listingHref(report.listing)} className="text-sm text-brand-700 hover:underline">
-                    {report.listing.title}
-                  </Link>
+                  <p className="font-semibold text-ink-900">
+                    {report.reason}
+                    <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-ink-700">
+                      {report.subject ? "Cuenta" : "Aviso"}
+                    </span>
+                  </p>
+                  {report.listing && (
+                    <Link href={listingHref(report.listing)} className="text-sm text-brand-700 hover:underline">
+                      {report.listing.title}
+                    </Link>
+                  )}
+                  {report.subject && (
+                    <Link href={`/vendedor/${report.subject.id}`} className="text-sm text-brand-700 hover:underline">
+                      {report.subject.name} ({report.subject.email})
+                      {report.subject.blockedAt ? " · ya suspendida" : ""}
+                    </Link>
+                  )}
                   {report.detail && <p className="mt-1 text-sm text-ink-700">{report.detail}</p>}
                   <p className="mt-1 text-xs text-ink-500">
                     {report.user ? `${report.user.name} (${report.user.email})` : "Denuncia anónima"} ·{" "}
-                    {formatRelativeDate(report.createdAt)} · aviso {report.listing.status}
+                    {formatRelativeDate(report.createdAt)}
+                    {report.listing ? ` · aviso ${report.listing.status}` : ""}
                   </p>
                 </div>
 
                 {!resolved && (
                   <div className="flex flex-wrap gap-2">
-                    <form action={moderateListingAction}>
-                      <input type="hidden" name="id" value={report.listing.id} />
-                      <input type="hidden" name="action" value="reject" />
-                      <button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
-                        Bajar aviso
-                      </button>
-                    </form>
+                    {report.listing && (
+                      <form action={moderateListingAction}>
+                        <input type="hidden" name="id" value={report.listing.id} />
+                        <input type="hidden" name="action" value="reject" />
+                        <button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+                          Bajar aviso
+                        </button>
+                      </form>
+                    )}
+                    {report.subject && !report.subject.blockedAt && (
+                      <Link
+                        href={`/admin/usuarios?q=${encodeURIComponent(report.subject.email)}`}
+                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                      >
+                        Revisar la cuenta
+                      </Link>
+                    )}
                     <form action={resolveReportAction}>
                       <input type="hidden" name="id" value={report.id} />
                       <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-slate-50">

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { recalculateReputation } from "@/lib/reviews";
 import { sendAccountBlockedEmail } from "@/lib/emails";
+import { notify } from "@/lib/notifications";
 
 /// Todas las acciones de administración pasan por acá: sin rol ADMIN no se ejecuta nada.
 async function requireAdmin() {
@@ -27,12 +28,29 @@ export async function moderateListingAction(formData: FormData): Promise<void> {
     pause: "PAUSED",
   };
 
+  const listing = await prisma.listing.findUnique({
+    where: { id },
+    select: { userId: true, title: true },
+  });
+
   if (action === "delete") {
     await prisma.listing.delete({ where: { id } }).catch(() => {});
   } else {
     const status = statuses[action];
     if (!status) return;
     await prisma.listing.update({ where: { id }, data: { status } }).catch(() => {});
+  }
+
+  // Que se entere por el sitio: bajar un aviso sin explicar nada es cómo se
+  // pierde a alguien que solo se equivocó de categoría.
+  if (listing && (action === "reject" || action === "delete")) {
+    await notify({
+      userId: listing.userId,
+      type: "MODERATION",
+      title: action === "delete" ? "Eliminamos tu aviso" : "Bajamos tu aviso",
+      body: `"${listing.title}" no cumple las reglas de publicación. Escríbenos si crees que fue un error.`,
+      url: "/ayuda/terminos",
+    });
   }
 
   revalidatePath("/admin/avisos");

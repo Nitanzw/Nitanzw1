@@ -16,11 +16,13 @@ npm run dev         # desarrollo
 npm run typecheck   # tipos
 npm run lint        # eslint
 npm test            # tests unitarios de src/lib
+npm run e2e         # pruebas de extremo a extremo (Playwright)
 npm run db:push     # sincronizar esquema
 npm run db:seed     # datos iniciales
 ```
 
 Antes de dar por terminado un cambio: `npm run typecheck && npm run lint && npm test`.
+Si tocaste flujos completos (publicar, ofertar, calificar, moderar), corre también `npm run e2e`.
 
 ## Convenciones
 
@@ -29,3 +31,8 @@ Antes de dar por terminado un cambio: `npm run typecheck && npm run lint && npm 
 - Las páginas que consultan la base llevan `export const dynamic = "force-dynamic"`.
 - Los comentarios explican el porqué, no el qué, y van en español.
 - La lógica que se pueda probar sin navegador vive en `src/lib/` y lleva test en `tests/`.
+  Ojo: un módulo con `import "server-only"` no se puede importar desde un test, así que
+  la función pura va en un archivo sin esa marca (ver `utils.ts` frente a `sms.ts`).
+- Para avisarle algo a alguien, `notify()` de `src/lib/notifications.ts`: guarda la
+  campanita y manda el push en la misma llamada.
+- En producción **nunca** `db:push`: `npm run db:deploy` aplica las migraciones.

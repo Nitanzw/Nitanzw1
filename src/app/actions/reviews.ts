@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { features } from "@/lib/features";
 import { recalculateReputation, reviewTargetFor } from "@/lib/reviews";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { notify, notifyMany } from "@/lib/notifications";
 
 export type ReviewState = { error?: string; ok?: boolean } | undefined;
 
@@ -55,6 +56,32 @@ export async function createReviewAction(_state: ReviewState, formData: FormData
     });
 
     await recalculateReputation(target.subjectId, tx);
+  });
+
+  // Una calificación muy baja suele ser la primera señal de un problema real.
+  // Que la moderación se entere sin depender de que alguien denuncie.
+  if (parsed.data.rating <= 2) {
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN", blockedAt: null },
+      select: { id: true },
+    });
+    await notifyMany(
+      admins.map((admin) => ({
+        userId: admin.id,
+        type: "MODERATION" as const,
+        title: `Calificación de ${parsed.data.rating} ${parsed.data.rating === 1 ? "estrella" : "estrellas"}`,
+        body: `${user.name} calificó a ${target.subjectName} por "${target.listingTitle}"`,
+        url: "/admin/calificaciones?malas=1",
+      })),
+    );
+  }
+
+  await notify({
+    userId: target.subjectId,
+    type: "REVIEW",
+    title: `${user.name.split(" ")[0]} te calificó con ${parsed.data.rating} ${parsed.data.rating === 1 ? "estrella" : "estrellas"}`,
+    body: parsed.data.comment ?? null,
+    url: "/mi-cuenta/calificaciones",
   });
 
   revalidatePath(`/mi-cuenta/mensajes/${target.conversationId}`);

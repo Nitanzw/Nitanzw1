@@ -5,13 +5,14 @@ import { Eye, Heart, MapPin, MessageCircle, Phone, ShieldAlert } from "lucide-re
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { describeAttribute } from "@/lib/verticals";
-import { formatPrice, formatRelativeDate, idFromListingParam, whatsappNumber } from "@/lib/utils";
+import { formatPrice, formatRelativeDate, idFromListingParam, listingHref, whatsappNumber } from "@/lib/utils";
 import { toggleFavoriteAction } from "@/app/actions/favorites";
 import { incrementViews } from "@/app/actions/listings";
 import { Gallery } from "@/components/gallery";
 import { ContactSeller } from "@/components/contact-seller";
 import { ListingCard } from "@/components/listing-card";
 import { ReportListing } from "@/components/report-listing";
+import { ShareListing } from "@/components/share-listing";
 import { ReputationBadge } from "@/components/rating-stars";
 import { reputationOf } from "@/lib/reputation";
 import { features } from "@/lib/features";
@@ -34,6 +35,7 @@ async function getListing(param: string) {
           name: true,
           avatarUrl: true,
           emailVerified: true,
+          phoneVerified: true,
           createdAt: true,
           ratingCount: true,
           ratingSum: true,
@@ -104,8 +106,69 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
     },
   });
 
+  // Datos estructurados: es lo que hace que Google muestre precio, estado y
+  // estrellas junto al resultado, que en clasificados decide el clic.
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const reputacionVendedor = reputationOf(listing.user);
+  const datosEstructurados = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: listing.title,
+    description: listing.description.slice(0, 400),
+    ...(listing.images[0] && {
+      image: listing.images.map((image) =>
+        image.url.startsWith("http") ? image.url : `${site}${image.url}`,
+      ),
+    }),
+    ...(listing.condition && {
+      itemCondition:
+        listing.condition === "NEW"
+          ? "https://schema.org/NewCondition"
+          : "https://schema.org/UsedCondition",
+    }),
+    offers: {
+      "@type": "Offer",
+      price: auctionData?.state.highestBid?.amount ?? listing.price ?? undefined,
+      priceCurrency: listing.currency,
+      availability:
+        listing.status === "ACTIVE"
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+      url: `${site}${listingHref(listing)}`,
+      ...(listing.commune && {
+        availableAtOrFrom: {
+          "@type": "Place",
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: listing.commune.name,
+            addressRegion: listing.commune.region.name,
+            addressCountry: "CL",
+          },
+        },
+      }),
+      seller: {
+        "@type": "Person",
+        name: listing.user.name,
+        ...(reputacionVendedor.average !== null && {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: reputacionVendedor.average,
+            reviewCount: reputacionVendedor.count,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }),
+      },
+    },
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
+      <script
+        type="application/ld+json"
+        // El contenido es JSON generado por nosotros, no entrada del usuario sin escapar.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(datosEstructurados) }}
+      />
       <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-ink-500">
         <Link href="/" className="hover:text-brand-700">Inicio</Link>
         {listing.category.parent && (
@@ -192,6 +255,13 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
               </form>
             </div>
 
+            <div className="mt-4">
+              <ShareListing
+                title={listing.title}
+                price={formatPrice(listing.price, listing.currency, listing.priceType)}
+              />
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-ink-500">
               <span className="flex items-center gap-1">
                 <MapPin className="size-4" />
@@ -259,6 +329,9 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
                 </p>
                 {listing.user.emailVerified && (
                   <p className="text-xs font-medium text-brand-700">Correo verificado</p>
+                )}
+                {listing.user.phoneVerified && (
+                  <p className="text-xs font-medium text-brand-700">Teléfono verificado</p>
                 )}
                 {features.reviews && (
                   <div className="mt-1">

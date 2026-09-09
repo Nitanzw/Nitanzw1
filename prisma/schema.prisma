@@ -54,6 +54,18 @@ enum Condition {
 enum TokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  PHONE_VERIFICATION
+}
+
+/// Motivo de una notificación. Determina el ícono y el color en la campanita.
+enum NotificationType {
+  MESSAGE
+  OUTBID
+  AUCTION_WON
+  AUCTION_CLOSED
+  AUCTION_CLOSING
+  REVIEW
+  MODERATION
 }
 
 enum AuctionStatus {
@@ -91,6 +103,9 @@ model User {
   bio           String?
   role          Role      @default(USER)
   emailVerified DateTime?
+  /// Teléfono comprobado con un código por SMS. Es la señal de confianza más
+  /// cara de falsificar después de la reputación.
+  phoneVerified DateTime?
   /// Cuenta suspendida por moderación. Un usuario bloqueado no puede iniciar
   /// sesión ni operar, y sus avisos dejan de mostrarse.
   blockedAt     DateTime?
@@ -101,15 +116,18 @@ model User {
   listings              Listing[]
   favorites             Favorite[]
   savedSearches         SavedSearch[]
-  sentMessages          Message[]      @relation("MessageSender")
-  conversationsAsBuyer  Conversation[] @relation("ConversationBuyer")
-  conversationsAsSeller Conversation[] @relation("ConversationSeller")
+  sentMessages          Message[]          @relation("MessageSender")
+  conversationsAsBuyer  Conversation[]     @relation("ConversationBuyer")
+  conversationsAsSeller Conversation[]     @relation("ConversationSeller")
   reports               Report[]
+  reportsAbout          Report[]           @relation("ReportSubject")
   payments              Payment[]
   tokens                Token[]
-  bids                  Bid[]          @relation("BidBidder")
-  reviewsWritten        Review[]       @relation("ReviewAuthor")
-  reviewsReceived       Review[]       @relation("ReviewSubject")
+  bids                  Bid[]              @relation("BidBidder")
+  notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
+  reviewsWritten        Review[]           @relation("ReviewAuthor")
+  reviewsReceived       Review[]           @relation("ReviewSubject")
 
   /// Reputación denormalizada, para no sumar calificaciones en cada listado.
   /// La recalcula src/lib/reputation.ts cada vez que cambia una reseña.
@@ -281,10 +299,14 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
+/// Denuncia de un aviso o de una persona. Al menos uno de los dos.
 model Report {
   id         String    @id @default(cuid())
-  listingId  String
-  listing    Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId  String?
+  listing    Listing?  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  /// A quién se denuncia, cuando el problema es la persona y no un aviso.
+  subjectId  String?
+  subject    User?     @relation("ReportSubject", fields: [subjectId], references: [id], onDelete: Cascade)
   userId     String?
   user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   reason     String
@@ -293,6 +315,7 @@ model Report {
   createdAt  DateTime  @default(now())
 
   @@index([listingId])
+  @@index([subjectId])
   @@index([resolvedAt])
 }
 
@@ -428,4 +451,47 @@ model Bid {
 
   @@index([auctionId, amount])
   @@index([bidderId])
+}
+
+/// Aviso dentro del sitio.
+///
+/// El correo llega tarde para una subasta que cierra en cinco minutos, y hay
+/// gente que no lo revisa nunca. La campanita es el canal inmediato; el correo
+/// sigue existiendo para lo que importa aunque no estés conectado.
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+
+  title String
+  body  String?
+  /// A dónde lleva al tocarla.
+  url   String
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+/// Un navegador o teléfono autorizado a recibir notificaciones push.
+///
+/// Una persona puede tener varios (el teléfono y el computador). Cuando el
+/// proveedor responde que el destino ya no existe, se borra: son suscripciones
+/// que caducan solas al desinstalar la aplicación o limpiar el navegador.
+model PushSubscription {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  /// Para reconocer el dispositivo en la lista de sesiones.
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

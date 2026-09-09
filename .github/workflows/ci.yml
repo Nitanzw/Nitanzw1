@@ -73,3 +73,19 @@ jobs:
 
       - name: Build
         run: npx next build
+
+      - name: Navegador para las pruebas de extremo a extremo
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas de extremo a extremo
+        run: npm run e2e
+        env:
+          CRON_SECRET: secreto-de-pruebas-en-ci
+
+      - name: Guardar el rastro de las pruebas que fallaron
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

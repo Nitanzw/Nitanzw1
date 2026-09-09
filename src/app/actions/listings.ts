@@ -9,6 +9,7 @@ import { parseAttributes } from "@/lib/verticals";
 import { listingHref, slugify } from "@/lib/utils";
 import { deleteImage } from "@/lib/storage";
 import { features } from "@/lib/features";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { defaultIncrement, listingSchema, validateSaleTerms } from "@/lib/listing-schema";
 
 export type ListingFormState = { error?: string } | undefined;
@@ -48,6 +49,19 @@ export async function createListingAction(
 ): Promise<ListingFormState> {
   const user = await getCurrentUser();
   if (!user) redirect("/ingresar?next=/publicar");
+
+  // Una cuenta recién creada no debería poder empapelar el sitio: el tope es
+  // más estrecho durante las primeras 24 horas, que es cuando publica el spam.
+  const esCuentaNueva = Date.now() - user.createdAt.getTime() < 24 * 60 * 60 * 1000;
+  const tope = esCuentaNueva ? 5 : 25;
+  const limite = checkRateLimit(`publicar:${user.id}`, tope, 24 * 60 * 60);
+  if (!limite.allowed) {
+    return {
+      error: esCuentaNueva
+        ? "Las cuentas nuevas pueden publicar hasta 5 avisos el primer día. Mañana podrás publicar más."
+        : "Llegaste al máximo de avisos por día. Inténtalo mañana.",
+    };
+  }
 
   const raw = formToObject(formData);
   const parsed = listingSchema.safeParse(raw);
@@ -247,12 +261,20 @@ export async function updateListingStatusAction(formData: FormData): Promise<voi
       pause: "PAUSED",
       activate: "ACTIVE",
       sold: "SOLD",
+      // Renovar es reactivar y correr la fecha de vencimiento otros 60 días.
+      renew: "ACTIVE",
     };
     const next = status[action];
     if (!next) return;
     await prisma.listing.update({
       where: { id },
-      data: { status: next, ...(next === "ACTIVE" && { publishedAt: new Date() }) },
+      data: {
+        status: next,
+        ...(next === "ACTIVE" && { publishedAt: new Date() }),
+        ...(action === "renew" && {
+          expiresAt: new Date(Date.now() + DAYS_ACTIVE * 24 * 60 * 60 * 1000),
+        }),
+      },
     });
   }
 

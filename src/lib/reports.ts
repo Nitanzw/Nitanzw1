@@ -11,3 +11,16 @@ export const REPORT_REASONS = [
 ] as const;
 
 export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/// Motivos para denunciar a una persona. Son distintos de los de un aviso:
+/// acá el problema es la conducta, no la publicación.
+export const USER_REPORT_REASONS = [
+  "Intentó estafarme",
+  "Pidió transferencia por adelantado",
+  "No respetó una subasta que ganó",
+  "Trato agresivo o insultos",
+  "Suplantación de identidad",
+  "Otro motivo",
+] as const;
+
+export type UserReportReason = (typeof USER_REPORT_REASONS)[number];

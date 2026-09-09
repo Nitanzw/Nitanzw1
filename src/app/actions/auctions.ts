@@ -9,6 +9,7 @@ import { features } from "@/lib/features";
 import { placeBid } from "@/lib/auction-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendOutbidEmail } from "@/lib/emails";
+import { notify } from "@/lib/notifications";
 import { listingHref } from "@/lib/utils";
 
 export type BidState = { error?: string; ok?: boolean; amount?: number; extended?: boolean } | undefined;
@@ -50,6 +51,16 @@ export async function placeBidAction(_state: BidState, formData: FormData): Prom
         select: { endsAt: true, listing: { select: { id: true, slug: true, title: true } } },
       }),
     ]);
+
+    if (auction) {
+      await notify({
+        userId: result.outbidUserId,
+        type: "OUTBID",
+        title: "Te superaron la oferta",
+        body: `${auction.listing.title} — ahora va en $${result.amount.toLocaleString("es-CL")}`,
+        url: listingHref(auction.listing),
+      });
+    }
 
     if (outbid && auction) {
       await sendOutbidEmail(outbid, {

@@ -28,7 +28,20 @@ Copia `.env.example` a `.env` y complétalo. Las que no pueden faltar en producc
 | `MAIL_DRIVER` + credenciales | Con `console`, los correos solo se escriben en el log |
 
 Opcionales pero recomendadas: `ERROR_WEBHOOK_URL` para enterarte de los errores,
-y `SEED_ADMIN_PASSWORD` si vas a sembrar la cuenta de administración.
+`SEED_ADMIN_PASSWORD` si vas a sembrar la cuenta de administración, y el par
+`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` para las notificaciones push.
+
+### Notificaciones push
+
+Se generan una sola vez y no se cambian: si las cambias, todos los teléfonos ya
+suscritos dejan de recibir avisos y hay que volver a pedirles permiso.
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Push **exige HTTPS** (salvo en localhost), así que hasta que el dominio no tenga
+certificado, la aplicación no podrá instalarse ni notificar.
 
 ## Primera puesta en marcha
 
@@ -137,3 +150,5 @@ si llegó ahí, falta uno de los tres.
 - [ ] Términos y política de privacidad revisados por un abogado
 - [ ] `/api/salud` monitoreado y `ERROR_WEBHOOK_URL` configurado
 - [ ] HTTPS activo y `NEXT_PUBLIC_SITE_URL` apuntando al dominio final
+- [ ] Claves VAPID generadas y **una notificación push recibida en un teléfono real**
+- [ ] La aplicación instalada en un Android y en un iPhone, y abierta desde el ícono

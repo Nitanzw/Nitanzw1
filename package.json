@@ -16,7 +16,9 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "test": "tsx --test \"tests/**/*.test.ts\"",
-    "mail:test": "tsx --conditions=react-server scripts/probar-correo.ts"
+    "mail:test": "tsx --conditions=react-server scripts/probar-correo.ts",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -34,15 +36,18 @@
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
     "sharp": "^0.35.4",
+    "web-push": "^3.6.7",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.1.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.1",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.4",
     "prisma": "^6.5.0",

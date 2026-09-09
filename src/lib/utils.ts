@@ -59,3 +59,17 @@ export function whatsappNumber(phone: string): string {
   if (digits.startsWith("9") && digits.length === 9) return `56${digits}`;
   return digits;
 }
+
+/**
+ * Normaliza un teléfono chileno a formato internacional (+56912345678).
+ *
+ * Devuelve null si no parece un número válido: mejor rechazarlo en el
+ * formulario que gastar un SMS en un número inexistente.
+ */
+export function normalizarTelefono(entrada: string): string | null {
+  const digitos = entrada.replace(/\D/g, "");
+  if (digitos.startsWith("56") && digitos.length === 11) return `+${digitos}`;
+  if (digitos.startsWith("9") && digitos.length === 9) return `+56${digitos}`;
+  if (digitos.length === 8) return `+569${digitos}`;
+  return null;
+}

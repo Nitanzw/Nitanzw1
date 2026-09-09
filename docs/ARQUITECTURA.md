@@ -35,6 +35,9 @@ src/lib/                 Lógica sin UI. Testeable y reutilizable.
   featuring.ts           Acreditación de pagos y vigencia de destacados.
   features.ts            Interruptores de funcionalidades.
   mail.ts                Envío de correo: console / smtp / resend.
+  notifications.ts       Avisos dentro del sitio (y push, en la misma llamada).
+  push.ts                Notificaciones push con VAPID.
+  sms.ts                 Envío de SMS: console / twilio.
   payments.ts            Proveedores de pago: dev / mercadopago.
   plans.ts               Catálogo de planes de destacado.
   prisma.ts              Cliente de base de datos (singleton).
@@ -54,6 +57,7 @@ src/app/actions/         Server Actions, agrupadas por dominio.
 src/app/api/             Route handlers: subida de imágenes, webhook, cron.
 src/components/          UI reutilizable. Client Components solo donde hace falta.
 tests/                   Tests unitarios de src/lib (node:test + tsx).
+e2e/                     Pruebas de extremo a extremo (Playwright).
 ```
 
 ## Recetas
@@ -208,6 +212,26 @@ en `src/lib/fulltext.ts`. Si cambias la definición de la columna, corre
 `npm run db:fulltext` de nuevo: el script la recrea. Los filtros estructurados
 (categoría, precio, comuna, atributos del vertical) siguen resolviéndose en
 `src/lib/search.ts` sobre los candidatos que devuelve el full-text.
+
+### Avisarle algo a alguien
+
+Una sola llamada, `notify()` de `src/lib/notifications.ts`, guarda el aviso en la
+campanita **y** lo manda como push al teléfono. No hay que acordarse de las dos
+cosas, y agregar un motivo nuevo es agregar una llamada y un valor al enum
+`NotificationType`. Para el correo, que es un canal distinto —sirve cuando la
+persona no vuelve en días—, están las plantillas de `src/lib/emails.ts`.
+
+Nunca lanza: que falle un aviso no puede tumbar la acción que lo originó. Una
+oferta se registra igual aunque la notificación no salga.
+
+### Escribir una prueba de extremo a extremo
+
+Van en `e2e/`, con los ayudantes de `e2e/utiles.ts` (registrarse, publicar,
+correr un cron). Para preparar situaciones que en la vida real toman días —una
+subasta a punto de cerrar, un aviso vencido— se usa `e2e/db.ts`, que habla
+directo con la base. **No agregues endpoints de prueba al sitio**: cualquier ruta
+que exista "solo para los tests" existe también para quien la encuentre en
+producción.
 
 ### Agregar una tarea programada
 

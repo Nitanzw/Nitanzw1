@@ -7,6 +7,8 @@ import { ReputationBadge } from "@/components/rating-stars";
 import { ReviewList } from "@/components/review-list";
 import { reputationOf } from "@/lib/reputation";
 import { features } from "@/lib/features";
+import { getCurrentUser } from "@/lib/auth";
+import { ReportUser } from "@/components/report-user";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ async function getSeller(id: string) {
       name: true,
       bio: true,
       emailVerified: true,
+      phoneVerified: true,
       blockedAt: true,
       createdAt: true,
       ratingCount: true,
@@ -66,7 +69,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 /// No expone correo ni teléfono; el contacto pasa siempre por la ficha del aviso.
 export default async function SellerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const seller = await getSeller(id);
+  const [seller, viewer] = await Promise.all([getSeller(id), getCurrentUser()]);
   // Una cuenta suspendida deja de tener vitrina pública.
   if (!seller || seller.blockedAt) notFound();
 
@@ -83,6 +86,11 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
             {seller.emailVerified && (
               <span className="flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
                 <BadgeCheck className="size-3.5" /> Correo verificado
+              </span>
+            )}
+            {seller.phoneVerified && (
+              <span className="flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                <BadgeCheck className="size-3.5" /> Teléfono verificado
               </span>
             )}
           </h1>
@@ -113,6 +121,12 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
             <ReviewList reviews={seller.reviewsReceived} />
           </div>
         </section>
+      )}
+
+      {viewer && viewer.id !== seller.id && (
+        <div className="mt-6">
+          <ReportUser subjectId={seller.id} name={seller.name} />
+        </div>
       )}
 
       <h2 className="mt-8 text-lg font-bold text-ink-900">Sus publicaciones</h2>

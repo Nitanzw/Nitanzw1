@@ -15,7 +15,9 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 | Imágenes | `sharp` (WebP + miniatura) sobre disco local o S3/R2 |
 | Pagos | Capa propia con proveedores intercambiables (apagada por bandera) |
 | Correo | `console` / SMTP / Resend, detrás de una misma interfaz |
-| Calidad | ESLint, tests con `node:test` y CI en GitHub Actions |
+| SMS | `console` / Twilio, con el mismo patrón que el correo |
+| App móvil | PWA instalable con service worker y notificaciones push (VAPID) |
+| Calidad | ESLint, tests unitarios, pruebas de extremo a extremo con Playwright y CI |
 
 ## Puesta en marcha
 
@@ -48,6 +50,7 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 | `npm run typecheck` | Chequeo de tipos |
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitarios de `src/lib` |
+| `npm run e2e` | Pruebas de extremo a extremo con Playwright |
 | `npm run db:deploy` | Aplica las migraciones (**esto es lo que se usa en producción**) |
 | `npm run db:migrate` | Crea una migración nueva tras cambiar el esquema |
 | `npm run db:push` | Sincroniza el esquema sin migración. Solo en desarrollo: puede borrar columnas |
@@ -73,6 +76,8 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
   pagos: al cerrar, el sistema pone en contacto al vendedor con el ganador.
 - **Calificaciones entre usuarios** después de un contacto real, con derecho a
   réplica y moderación: la defensa contra estafas.
+- **Verificación de teléfono por SMS**, la señal de confianza más difícil de
+  falsificar después de la reputación.
 - **Destacados pagados** listos pero **apagados** (`FEATURE_PAYMENTS`): catálogo
   de planes, checkout, acreditación por webhook y vigencia acumulable.
 - **Cuentas completas**: registro, inicio de sesión, verificación de correo,
@@ -82,7 +87,12 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Denuncias y panel de administración**: métricas, moderación de avisos,
   bandeja de denuncias y gestión de roles.
 - **Expiración automática** de avisos y destacados vencidos vía `/api/cron/expirar`.
-- `robots.txt`, `sitemap.xml`, páginas de error y de carga.
+- **Notificaciones** dentro del sitio y push al teléfono: mensajes, ofertas
+  superadas, subastas que cierran, calificaciones y avisos de moderación.
+- **Instalable en el teléfono**: manifiesto, íconos, pantalla sin conexión y
+  accesos directos a publicar, mensajes y ofertas.
+- `robots.txt`, `sitemap.xml`, datos estructurados por aviso, imagen de vista
+  previa para compartir, páginas de error y de carga.
 
 ## Cómo agregar funciones
 
@@ -219,14 +229,57 @@ existe para repararlo si alguien corrió `db:push` y se llevó el trigger por de
 Si esa columna no existe, la búsqueda cae sola a una coincidencia por subcadena y
 avisa en el log: un despliegue al que se le olvidó el paso sigue funcionando.
 
+## App instalable y notificaciones
+
+oktienda.cl se instala en el teléfono como una aplicación: en Android el propio
+navegador ofrece instalarla; en iPhone se agrega desde «Compartir → Agregar a
+pantalla de inicio», y el sitio explica los pasos.
+
+Una vez instalada, las notificaciones push llegan aunque la aplicación esté
+cerrada: te escribieron, te superaron una oferta, cerró una subasta. Las de
+subasta hacen vibrar el teléfono, porque son las que no pueden esperar.
+
+Para activarlas hace falta un par de claves VAPID, que se generan una vez:
+
+```bash
+npx web-push generate-vapid-keys   # va a VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY
+```
+
+Sin esas claves el sitio funciona igual, solo que sin push. El permiso se pide
+únicamente cuando la persona toca «Activar notificaciones» en su perfil: pedirlo
+al entrar se gana un bloqueo permanente del que no se vuelve.
+
+El service worker **no cachea avisos ni precios** a propósito. En un marketplace,
+mostrar un precio viejo o una subasta ya cerrada es peor que mostrar un error de
+conexión; lo único que guarda es la pantalla de «sin conexión».
+
 ## Calidad
 
 ```bash
-npm run typecheck && npm run lint && npm test
+npm run typecheck && npm run lint && npm test && npm run e2e
 ```
 
-Los tests cubren la lógica de `src/lib` (formatos, verticales, búsqueda, planes,
-límite de intentos). GitHub Actions corre lo mismo más el build en cada push.
+Los tests unitarios cubren la lógica de `src/lib` (formatos, verticales,
+búsqueda, subastas, reputación, planes, límites). Las pruebas de extremo a
+extremo recorren el sitio como una persona:
+
+| Prueba | Qué recorre |
+| --- | --- |
+| `01-cuenta` | Registro, verificación de correo, recuperación de contraseña |
+| `02-publicar` | Publicar con foto, buscar, editar, pausar, vender, eliminar |
+| `03-comprar` | Favoritos, contacto, chat, calificación y derecho a réplica |
+| `04-subasta` | Ofertar, incremento mínimo, reserva, últimos minutos, cierre y contacto |
+| `05-moderacion` | Denuncia de aviso y de cuenta, bajar aviso, suspender, calificación baja |
+
+Se corren contra el sitio ya construido:
+
+```bash
+npm run db:deploy && npm run db:seed
+npm run e2e
+```
+
+GitHub Actions corre todo eso más el build en cada push, contra un Postgres real
+creado desde las migraciones.
 
 ## Imágenes
 

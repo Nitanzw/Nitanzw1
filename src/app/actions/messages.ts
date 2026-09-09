@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendNewMessageEmail } from "@/lib/emails";
+import { notify } from "@/lib/notifications";
 
 export type MessageState = { error?: string; ok?: boolean } | undefined;
 
@@ -46,7 +47,16 @@ export async function startConversationAction(
     where: { id: listing.userId },
     select: { name: true, email: true },
   });
-  if (seller) await sendNewMessageEmail(seller, listing.title, conversation.id);
+  if (seller) {
+    await notify({
+      userId: listing.userId,
+      type: "MESSAGE",
+      title: `${user.name.split(" ")[0]} te escribió`,
+      body: `Por tu aviso "${listing.title}"`,
+      url: `/mi-cuenta/mensajes/${conversation.id}`,
+    });
+    await sendNewMessageEmail(seller, listing.title, conversation.id);
+  }
 
   revalidatePath("/mi-cuenta/mensajes");
   return { ok: true };
@@ -71,6 +81,16 @@ export async function replyAction(_state: MessageState, formData: FormData): Pro
 
   await prisma.message.create({ data: { conversationId, senderId: user.id, body } });
   await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+
+  const destinatario =
+    conversation.buyerId === user.id ? conversation.sellerId : conversation.buyerId;
+  await notify({
+    userId: destinatario,
+    type: "MESSAGE",
+    title: `${user.name.split(" ")[0]} te respondió`,
+    body: body.slice(0, 80),
+    url: `/mi-cuenta/mensajes/${conversationId}`,
+  });
 
   revalidatePath(`/mi-cuenta/mensajes/${conversationId}`);
   revalidatePath("/mi-cuenta/mensajes");

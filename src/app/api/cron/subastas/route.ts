@@ -7,6 +7,7 @@ import {
   markClosingSoonNotified,
 } from "@/lib/auction-service";
 import { sendAuctionClosedEmail, sendAuctionClosingSoonEmail } from "@/lib/emails";
+import { notify, notifyMany } from "@/lib/notifications";
 import { listingHref } from "@/lib/utils";
 
 /**
@@ -36,6 +37,16 @@ export async function GET(request: Request) {
       select: { id: true, slug: true },
     });
     if (!listing) continue;
+
+    await notifyMany(
+      notice.bidders.map((bidder) => ({
+        userId: bidder.userId,
+        type: "AUCTION_CLOSING" as const,
+        title: bidder.winning ? "Vas ganando y la subasta cierra pronto" : "Última oportunidad de ofertar",
+        body: `${notice.listingTitle} — cierra en ${notice.minutesLeft} minutos, va en $${notice.highestAmount.toLocaleString("es-CL")}`,
+        url: listingHref(listing),
+      })),
+    );
 
     for (const bidder of notice.bidders) {
       const sent = await sendAuctionClosingSoonEmail(bidder, {
@@ -72,6 +83,32 @@ export async function GET(request: Request) {
         ? prisma.user.findUnique({ where: { id: result.winnerId }, select: { name: true, email: true } })
         : Promise.resolve(null),
     ]);
+
+    await notify({
+      userId: result.sellerId,
+      type: "AUCTION_CLOSED",
+      title:
+        result.status === "WON"
+          ? "Tu subasta cerró con ganador"
+          : result.status === "NO_BIDS"
+            ? "Tu subasta cerró sin ofertas"
+            : "Tu subasta cerró bajo el precio de reserva",
+      body:
+        result.status === "WON"
+          ? `${result.listingTitle} — $${result.amount?.toLocaleString("es-CL")}. Ya abrimos la conversación con el ganador.`
+          : result.listingTitle,
+      url: result.conversationId ? `/mi-cuenta/mensajes/${result.conversationId}` : href,
+    });
+
+    if (result.winnerId) {
+      await notify({
+        userId: result.winnerId,
+        type: "AUCTION_WON",
+        title: "¡Ganaste la subasta!",
+        body: `${result.listingTitle} — $${result.amount?.toLocaleString("es-CL")}. Coordina la entrega con el vendedor.`,
+        url: result.conversationId ? `/mi-cuenta/mensajes/${result.conversationId}` : href,
+      });
+    }
 
     if (seller) {
       await sendAuctionClosedEmail(seller, {

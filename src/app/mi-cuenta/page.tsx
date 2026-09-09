@@ -106,6 +106,8 @@ export default async function MyListingsPage() {
             )}
             {listing.status === "ACTIVE" ? (
               <StatusButton id={listing.id} action="pause" label="Pausar" />
+            ) : listing.status === "EXPIRED" ? (
+              <StatusButton id={listing.id} action="renew" label="Renovar 60 días" />
             ) : (
               <StatusButton id={listing.id} action="activate" label="Activar" />
             )}

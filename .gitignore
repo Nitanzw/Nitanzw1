@@ -10,3 +10,6 @@ next-env.d.ts
 public/uploads/*
 !public/uploads/.gitkeep
 tsconfig.tsbuildinfo
+playwright-report/
+test-results/
+respaldos/

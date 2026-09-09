@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Heart, MessageCircle, Plus, User2 } from "lucide-react";
+import { Bell, Heart, MessageCircle, Plus, User2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SearchBar } from "@/components/search-bar";
+import { unreadCount } from "@/lib/notifications";
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
+  const sinLeer = user ? await unreadCount(user.id) : 0;
   const categories = await prisma.category.findMany({
     where: { parentId: null },
     orderBy: { position: "asc" },
@@ -28,6 +30,18 @@ export async function SiteHeader() {
         <nav className="ml-auto flex items-center gap-1">
           {user ? (
             <>
+              <Link
+                href="/mi-cuenta/notificaciones"
+                className="relative rounded-lg p-2 text-ink-700 hover:bg-slate-100"
+                aria-label={sinLeer > 0 ? `${sinLeer} notificaciones sin leer` : "Notificaciones"}
+              >
+                <Bell className="size-5" />
+                {sinLeer > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                    {sinLeer > 9 ? "9+" : sinLeer}
+                  </span>
+                )}
+              </Link>
               <Link
                 href="/mi-cuenta/favoritos"
                 className="hidden rounded-lg p-2 text-ink-700 hover:bg-slate-100 sm:block"

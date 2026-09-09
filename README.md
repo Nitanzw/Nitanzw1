@@ -307,7 +307,8 @@ src/
 
 Cosas que la base deja preparadas pero todavía no implementa:
 
+- Editar un aviso ya publicado (hoy solo se puede pausar, marcar vendido o eliminar).
+- Notificaciones dentro del sitio: hoy los avisos van solo por correo.
 - Boleta electrónica y Webpay, para cuando se enciendan los pagos.
-- Bloqueo de usuarios desde el panel (hoy solo se moderan avisos).
 - Ordenar los resultados por relevancia (hoy el full-text decide qué coincide y el
   orden sigue siendo destacados / fecha / precio).

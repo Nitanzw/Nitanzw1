@@ -229,9 +229,9 @@ Vercel Cron o GitHub Actions.
 
 ## Cosas que faltan (pendientes conocidos)
 
+- Editar un aviso ya publicado.
 - Ordenar por relevancia dentro de los resultados de una búsqueda de texto.
 - Boleta electrónica de los pagos.
 - Integración con Webpay.
-- Bloqueo de usuarios en el panel de administración (hoy se moderan avisos y calificaciones).
 - Que una calificación muy baja avise al equipo de moderación.
 - Notificaciones en el sitio (hoy los avisos de subasta van solo por correo).

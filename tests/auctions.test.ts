@@ -7,6 +7,9 @@ import {
   reserveMet,
   resolveOutcome,
   timeLeftLabel,
+  countdownLabel,
+  countdownInterval,
+  urgencyOf,
   type AuctionState,
 } from "../src/lib/auctions.ts";
 
@@ -160,5 +163,48 @@ describe("tiempo restante", () => {
 
   it("una subasta pasada se muestra cerrada", () => {
     assert.equal(timeLeftLabel(new Date("2026-09-09T11:00:00Z"), AHORA), "Cerrada");
+  });
+});
+
+describe("urgencia del cierre", () => {
+  const cierre = new Date("2026-09-09T12:00:00Z");
+
+  it("distingue los tramos", () => {
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T11:59:30Z")), "final", "30 s antes");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T11:51:00Z")), "final", "9 min antes");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T11:45:00Z")), "soon", "15 min antes");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T09:30:00Z")), "soon", "2,5 h antes");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-08T12:00:00Z")), "normal", "un día antes");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T12:00:01Z")), "closed", "pasado el cierre");
+  });
+
+  it("el borde exacto de los 10 minutos ya es final", () => {
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T11:50:00Z")), "final");
+    assert.equal(urgencyOf(cierre, new Date("2026-09-09T11:49:59Z")), "soon");
+  });
+});
+
+describe("cuenta regresiva", () => {
+  const cierre = new Date("2026-09-09T12:00:00Z");
+
+  it("en los últimos minutos cuenta los segundos", () => {
+    assert.equal(countdownLabel(cierre, new Date("2026-09-09T11:59:31Z")), "0:29");
+    assert.equal(countdownLabel(cierre, new Date("2026-09-09T11:55:00Z")), "5:00");
+    assert.equal(countdownLabel(cierre, new Date("2026-09-09T11:51:05Z")), "8:55");
+  });
+
+  it("antes muestra horas y días", () => {
+    assert.equal(countdownLabel(cierre, new Date("2026-09-09T09:30:00Z")), "2h 30m");
+    assert.equal(countdownLabel(cierre, new Date("2026-09-07T10:00:00Z")), "2d 2h");
+  });
+
+  it("cerrada cuando ya pasó", () => {
+    assert.equal(countdownLabel(cierre, new Date("2026-09-09T12:00:00Z")), "Cerrada");
+  });
+
+  it("refresca cada segundo solo en los últimos minutos", () => {
+    assert.equal(countdownInterval("final"), 1000);
+    assert.equal(countdownInterval("soon"), 30_000);
+    assert.equal(countdownInterval("normal"), 60_000);
   });
 });

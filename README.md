@@ -126,7 +126,15 @@ subasta que termina hoy vale más que una que cierra en cinco días:
   orden, manda el suyo y el bloque no aparece.
 - Hay un orden explícito **"Cierra pronto"** y un filtro por tipo de venta
   (solo subastas abiertas / solo venta directa).
-- Las tarjetas muestran la cuenta regresiva, en rojo cuando faltan menos de 3 horas.
+- Las tarjetas muestran la cuenta regresiva viva: en rojo bajo las 3 horas y,
+  en los **últimos 10 minutos**, contando al segundo (`m:ss`) con alarma.
+- En la ficha, esos últimos minutos se muestran sobre fondo rojo parpadeante,
+  con el aviso de que ofertar ahora extiende el cierre. Además la página se
+  refresca sola (cada 10 s en la recta final, cada minuto antes) para que nadie
+  pierda una subasta mirando una oferta vieja.
+
+Cuando falta menos de una hora, quienes ofertaron reciben un correo que les dice
+si van ganando o si los superaron. Se manda una sola vez por subasta.
 
 Después del cierre, comprador y vendedor se califican como en cualquier venta.
 
@@ -167,8 +175,13 @@ mostrando destacados. Para encenderlos: `FEATURE_PAYMENTS="on"` y un
 ## Moderación
 
 Los usuarios con rol `ADMIN` ven `/admin`: métricas del marketplace, bandeja de
-denuncias, moderación de avisos (bajar, reactivar, eliminar) y gestión de roles.
-Cualquier visitante puede denunciar un aviso desde su ficha.
+denuncias, moderación de avisos (bajar, reactivar, eliminar), calificaciones y
+gestión de usuarios. Cualquier visitante puede denunciar un aviso desde su ficha.
+
+**Suspender una cuenta** corta por todos lados a la vez: la sesión deja de
+valer, no puede volver a entrar (el login le dice el motivo), sus avisos pasan a
+pausados, sus subastas abiertas se cancelan y su perfil público responde 404. Al
+reactivarla vuelve a entrar, y es él quien decide si republica sus avisos.
 
 ## Tareas programadas
 
@@ -178,7 +191,7 @@ Ambas rutas se protegen con `CRON_SECRET`:
 | --- | --- | --- |
 | `/api/cron/expirar` | Vence avisos pasados de fecha, apaga destacados caducados y limpia tokens | Una vez al día |
 | `/api/cron/alertas` | Avisa por correo los avisos nuevos que calzan con una búsqueda guardada | Cada 1-6 horas |
-| `/api/cron/subastas` | Cierra las subastas vencidas, abre el contacto con el ganador y avisa por correo | **Cada 5 minutos** |
+| `/api/cron/subastas` | Avisa a quienes ofertaron que el cierre está cerca, cierra las vencidas, abre el contacto con el ganador y avisa por correo | **Cada 5 minutos** |
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/expirar

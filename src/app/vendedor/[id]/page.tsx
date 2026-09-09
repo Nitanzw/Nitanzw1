@@ -26,6 +26,7 @@ async function getSeller(id: string) {
       name: true,
       bio: true,
       emailVerified: true,
+      blockedAt: true,
       createdAt: true,
       ratingCount: true,
       ratingSum: true,
@@ -66,7 +67,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function SellerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const seller = await getSeller(id);
-  if (!seller) notFound();
+  // Una cuenta suspendida deja de tener vitrina pública.
+  if (!seller || seller.blockedAt) notFound();
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">

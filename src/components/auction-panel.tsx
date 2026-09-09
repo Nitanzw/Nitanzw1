@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { Gavel, Clock, Lock, TrendingUp } from "lucide-react";
+import { useActionState, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlarmClock, Gavel, Lock, TrendingUp } from "lucide-react";
 import { placeBidAction } from "@/app/actions/auctions";
 import { formatPrice, formatRelativeDate } from "@/lib/utils";
-import { timeLeftLabel } from "@/lib/auctions";
+import { type Urgency } from "@/lib/auctions";
+import { Countdown } from "@/components/countdown";
 
 export type AuctionPanelData = {
   auctionId: string;
@@ -15,6 +17,8 @@ export type AuctionPanelData = {
   endsAt: string;
   extensionMinutes: number;
   extended: boolean;
+  countdownLabel: string;
+  urgency: Urgency;
   reserveMet: boolean | null;
   bidCount: number;
   highest: { amount: number; bidderName: string } | null;
@@ -33,24 +37,33 @@ const CLOSED_LABEL: Record<string, string> = {
 };
 
 export function AuctionPanel({ data }: { data: AuctionPanelData }) {
+  const router = useRouter();
   const [state, action, pending] = useActionState(placeBidAction, undefined);
-  const endsAt = useMemo(() => new Date(data.endsAt), [data.endsAt]);
+  const [urgency, setUrgency] = useState<Urgency>(data.urgency);
 
-  // La cuenta regresiva se calcula en el navegador para que no quede congelada
-  // en el momento en que se renderizó la página.
-  const [label, setLabel] = useState(() => timeLeftLabel(endsAt));
-  const [trackedEndsAt, setTrackedEndsAt] = useState(data.endsAt);
-  if (trackedEndsAt !== data.endsAt) {
-    // El cierre se movió (se extendió la subasta): recalcular sin esperar al tick.
-    setTrackedEndsAt(data.endsAt);
-    setLabel(timeLeftLabel(endsAt));
-  }
+  const handleUrgency = useCallback((next: Urgency) => setUrgency(next), []);
+
+  /**
+   * Mientras la subasta esté por cerrar, la ficha se refresca sola: en los
+   * últimos minutos alguien puede ofertar en cualquier momento, y quedarse
+   * mirando una oferta vieja es justo lo que hace perder una subasta.
+   * Al cerrar, un último refresco trae el resultado.
+   */
   useEffect(() => {
-    const timer = setInterval(() => setLabel(timeLeftLabel(endsAt)), 30_000);
-    return () => clearInterval(timer);
-  }, [endsAt]);
+    if (data.status !== "ACTIVE") return;
+    if (urgency === "normal") return;
 
-  const closed = data.status !== "ACTIVE" || endsAt <= new Date();
+    if (urgency === "closed") {
+      const timer = setTimeout(() => router.refresh(), 2000);
+      return () => clearTimeout(timer);
+    }
+
+    const every = urgency === "final" ? 10_000 : 60_000;
+    const timer = setInterval(() => router.refresh(), every);
+    return () => clearInterval(timer);
+  }, [urgency, data.status, router]);
+
+  const closed = data.status !== "ACTIVE" || urgency === "closed";
   const minimum = state?.ok && state.amount ? state.amount + data.minIncrement : data.minimum;
 
   return (
@@ -59,10 +72,13 @@ export function AuctionPanel({ data }: { data: AuctionPanelData }) {
         <span className="flex items-center gap-2 font-bold text-amber-900">
           <Gavel className="size-5" /> Subasta
         </span>
-        <span className="flex items-center gap-1.5 text-sm font-medium text-amber-900">
-          <Clock className="size-4" />
-          {closed ? "Cerrada" : label}
-        </span>
+        <Countdown
+          endsAt={data.endsAt}
+          initialLabel={data.countdownLabel}
+          initialUrgency={data.urgency}
+          variant="panel"
+          onFinalMinutes={handleUrgency}
+        />
       </header>
 
       <div className="space-y-4 p-5">
@@ -78,6 +94,13 @@ export function AuctionPanel({ data }: { data: AuctionPanelData }) {
             {data.highest && ` · va ganando ${data.highest.bidderName}`}
           </p>
         </div>
+
+        {!closed && urgency === "final" && (
+          <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            <AlarmClock className="size-4 animate-pulse" />
+            ¡Últimos minutos! Una oferta ahora extiende el cierre {data.extensionMinutes} minutos.
+          </p>
+        )}
 
         {data.reserveMet !== null && (
           <p

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Clock, Gavel, ImageIcon, MapPin, Star } from "lucide-react";
+import { Gavel, ImageIcon, MapPin, Star } from "lucide-react";
 import { formatPrice, formatRelativeDate, listingHref } from "@/lib/utils";
-import { timeLeftLabel } from "@/lib/auctions";
+import { countdownLabel, urgencyOf } from "@/lib/auctions";
+import { Countdown } from "@/components/countdown";
 import type { Currency, PriceType } from "@prisma/client";
 
 export type ListingCardData = {
@@ -24,9 +25,7 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
   const now = new Date();
   const featured = listing.featuredUntil ? listing.featuredUntil > now : false;
   const auctionOpen = listing.auction?.status === "ACTIVE" && listing.auction.endsAt > now;
-  // Menos de 3 horas: se marca en rojo, porque es cuando conviene actuar.
-  const closingSoon =
-    auctionOpen && listing.auction!.endsAt.getTime() - now.getTime() < 3 * 60 * 60 * 1000;
+
   const cover = listing.images[0]?.thumbnailUrl ?? listing.images[0]?.url;
 
   return (
@@ -71,10 +70,11 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
                 ? "Sin ofertas"
                 : `${listing.auction?._count.bids} ${listing.auction?._count.bids === 1 ? "oferta" : "ofertas"}`}
             </span>
-            <span className={`flex items-center gap-1 ${closingSoon ? "text-red-600" : "text-ink-500"}`}>
-              <Clock className="size-3" />
-              {timeLeftLabel(listing.auction!.endsAt, now).replace("Cierra en ", "")}
-            </span>
+            <Countdown
+              endsAt={listing.auction!.endsAt.toISOString()}
+              initialLabel={countdownLabel(listing.auction!.endsAt, now)}
+              initialUrgency={urgencyOf(listing.auction!.endsAt, now)}
+            />
           </p>
         )}
         <h3 className="line-clamp-2 text-sm text-ink-700">{listing.title}</h3>

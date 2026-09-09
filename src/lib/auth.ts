@@ -53,7 +53,7 @@ export const getCurrentUser = cache(async () => {
   try {
     const { payload } = await jwtVerify(token, secret());
     if (!payload.sub) return null;
-    return await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
         id: true,
@@ -63,9 +63,17 @@ export const getCurrentUser = cache(async () => {
         avatarUrl: true,
         role: true,
         emailVerified: true,
+        blockedAt: true,
         createdAt: true,
       },
     });
+
+    // Una cuenta bloqueada equivale a no tener sesión: así el bloqueo corta
+    // todas las acciones de una vez, sin tener que acordarse de comprobarlo
+    // en cada una.
+    if (!user || user.blockedAt) return null;
+
+    return user;
   } catch {
     return null;
   }

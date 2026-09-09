@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { ListingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
@@ -10,31 +9,13 @@ import { parseAttributes } from "@/lib/verticals";
 import { listingHref, slugify } from "@/lib/utils";
 import { deleteImage } from "@/lib/storage";
 import { features } from "@/lib/features";
-import { AUCTION_DURATIONS, MIN_INCREMENT_FLOOR } from "@/lib/auctions";
+import { defaultIncrement, listingSchema, validateSaleTerms } from "@/lib/listing-schema";
 
 export type ListingFormState = { error?: string } | undefined;
 
 const DAYS_ACTIVE = 60;
 
-const listingSchema = z.object({
-  title: z.string().trim().min(8, "El título debe tener al menos 8 caracteres").max(120),
-  description: z.string().trim().min(20, "Describe tu aviso con al menos 20 caracteres").max(5000),
-  categoryId: z.string().min(1, "Elige una categoría"),
-  communeId: z.string().optional().or(z.literal("").transform(() => undefined)),
-  priceType: z.enum(["FIXED", "NEGOTIABLE", "FREE", "ON_REQUEST"]).default("FIXED"),
-  currency: z.enum(["CLP", "UF", "USD"]).default("CLP"),
-  price: z.coerce.number().int().nonnegative().optional(),
-  condition: z.enum(["NEW", "USED"]).optional().or(z.literal("").transform(() => undefined)),
-  contactPhone: z.string().trim().max(20).optional().or(z.literal("").transform(() => undefined)),
-  contactWhatsapp: z.coerce.boolean().optional(),
-  allowMessages: z.coerce.boolean().optional(),
-  images: z.string().optional(),
-  saleType: z.enum(["FIXED", "AUCTION"]).optional(),
-  startPrice: z.coerce.number().int().positive().optional(),
-  minIncrement: z.coerce.number().int().min(MIN_INCREMENT_FLOOR).optional(),
-  reservePrice: z.coerce.number().int().positive().optional(),
-  durationDays: z.coerce.number().int().optional(),
-});
+
 
 /// El formulario envía las imágenes ya subidas como JSON: [{url, thumbnailUrl}].
 function parseImages(raw: string | undefined): { url: string; thumbnailUrl: string | null }[] {
@@ -84,23 +65,11 @@ export async function createListingAction(
     return { error: "Faltan datos obligatorios de la categoría elegida" };
   }
 
-  const isAuction = features.auctions && parsed.data.saleType === "AUCTION";
-
-  if (isAuction) {
-    if (!parsed.data.startPrice) return { error: "Ingresa el precio inicial de la subasta" };
-    if (parsed.data.reservePrice && parsed.data.reservePrice < parsed.data.startPrice) {
-      return { error: "El precio de reserva no puede ser menor que el precio inicial" };
-    }
-    if (!AUCTION_DURATIONS.some((option) => option.days === parsed.data.durationDays)) {
-      return { error: "Elige una duración válida para la subasta" };
-    }
-  }
+  const { isAuction, error } = validateSaleTerms(parsed.data, { auctionsEnabled: features.auctions });
+  if (error) return { error };
 
   const priceNeeded =
     !isAuction && (parsed.data.priceType === "FIXED" || parsed.data.priceType === "NEGOTIABLE");
-  if (priceNeeded && (parsed.data.price === undefined || Number.isNaN(parsed.data.price))) {
-    return { error: "Ingresa un precio o elige 'Consultar precio'" };
-  }
 
   const images = parseImages(parsed.data.images);
 
@@ -130,7 +99,7 @@ export async function createListingAction(
         auction: {
           create: {
             startPrice: parsed.data.startPrice!,
-            minIncrement: parsed.data.minIncrement ?? Math.max(MIN_INCREMENT_FLOOR, Math.round(parsed.data.startPrice! * 0.02)),
+            minIncrement: parsed.data.minIncrement ?? defaultIncrement(parsed.data.startPrice!),
             reservePrice: parsed.data.reservePrice ?? null,
             endsAt: auctionEnd,
             originalEndsAt: auctionEnd,

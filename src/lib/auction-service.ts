@@ -230,3 +230,72 @@ export async function auctionForListing(listingId: string) {
 
   return { auction, state, minimum: nextMinimumBid(state) };
 }
+
+export type ClosingSoonNotice = {
+  auctionId: string;
+  listingId: string;
+  listingTitle: string;
+  minutesLeft: number;
+  highestAmount: number;
+  /// Cada persona que ofertó, y si va ganando.
+  bidders: { userId: string; name: string; email: string; winning: boolean }[];
+};
+
+/**
+ * Subastas que cierran dentro de la ventana indicada y a las que todavía no se
+ * les avisó. Devuelve a quiénes hay que escribirles y si van ganando: es el
+ * momento en que un aviso sirve de algo, porque una oferta a esta altura
+ * todavía extiende el cierre.
+ */
+export async function auctionsClosingSoon(minutes = 60): Promise<ClosingSoonNotice[]> {
+  const now = new Date();
+
+  const auctions = await prisma.auction.findMany({
+    where: {
+      status: "ACTIVE",
+      closingSoonNotifiedAt: null,
+      endsAt: { gt: now, lte: new Date(now.getTime() + minutes * 60_000) },
+      bids: { some: {} },
+    },
+    include: {
+      listing: { select: { id: true, title: true } },
+      bids: {
+        orderBy: { amount: "desc" },
+        select: { amount: true, bidder: { select: { id: true, name: true, email: true, blockedAt: true } } },
+      },
+    },
+  });
+
+  return auctions.map((auction) => {
+    const highest = auction.bids[0];
+    const vistos = new Set<string>();
+    const bidders = auction.bids
+      .filter((bid) => {
+        if (bid.bidder.blockedAt || vistos.has(bid.bidder.id)) return false;
+        vistos.add(bid.bidder.id);
+        return true;
+      })
+      .map((bid) => ({
+        userId: bid.bidder.id,
+        name: bid.bidder.name,
+        email: bid.bidder.email,
+        winning: bid.bidder.id === highest.bidder.id,
+      }));
+
+    return {
+      auctionId: auction.id,
+      listingId: auction.listing.id,
+      listingTitle: auction.listing.title,
+      minutesLeft: Math.max(1, Math.round((auction.endsAt.getTime() - now.getTime()) / 60_000)),
+      highestAmount: highest.amount,
+      bidders,
+    };
+  });
+}
+
+export async function markClosingSoonNotified(auctionId: string): Promise<void> {
+  await prisma.auction.update({
+    where: { id: auctionId },
+    data: { closingSoonNotifiedAt: new Date() },
+  });
+}

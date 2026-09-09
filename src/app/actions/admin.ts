@@ -6,6 +6,7 @@ import type { ListingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { recalculateReputation } from "@/lib/reviews";
+import { sendAccountBlockedEmail } from "@/lib/emails";
 
 /// Todas las acciones de administración pasan por acá: sin rol ADMIN no se ejecuta nada.
 async function requireAdmin() {
@@ -75,4 +76,50 @@ export async function deleteReviewAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/calificaciones");
   revalidatePath(`/vendedor/${review.subjectId}`);
+}
+
+/**
+ * Suspende (o reactiva) una cuenta.
+ *
+ * Bloquear no es solo marcar al usuario: hay que sacar de circulación lo que
+ * dejó publicado. Se pausan sus avisos y se cancelan sus subastas abiertas
+ * —nadie pierde dinero porque no hay pagos, pero sí quedaría gente ofertando
+ * por algo que ya no se puede concretar—.
+ */
+export async function toggleUserBlockAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  if (id === admin.id) return; // un administrador no se bloquea a sí mismo
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, blockedAt: true },
+  });
+  if (!user) return;
+
+  if (user.blockedAt) {
+    await prisma.user.update({ where: { id }, data: { blockedAt: null, blockedReason: null } });
+  } else {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: { blockedAt: new Date(), blockedReason: reason || null },
+      });
+      await tx.listing.updateMany({
+        where: { userId: id, status: "ACTIVE" },
+        data: { status: "PAUSED" },
+      });
+      await tx.auction.updateMany({
+        where: { listing: { userId: id }, status: "ACTIVE" },
+        data: { status: "CANCELLED", closedAt: new Date() },
+      });
+    });
+
+    await sendAccountBlockedEmail(user, reason || null);
+  }
+
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/");
 }

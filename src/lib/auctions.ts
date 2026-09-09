@@ -137,3 +137,48 @@ export function timeLeftLabel(endsAt: Date, now: Date = new Date()): string {
   const days = Math.floor(hours / 24);
   return `Cierra en ${days} ${days === 1 ? "día" : "días"} ${hours % 24} h`;
 }
+
+/// Umbrales de urgencia del cierre, en minutos.
+export const URGENCY_FINAL_MINUTES = 10;
+export const URGENCY_SOON_MINUTES = 180;
+
+export type Urgency = "closed" | "final" | "soon" | "normal";
+
+/**
+ * Qué tan apremiante es el cierre.
+ *
+ * `final` es la ventana en la que todavía se puede reaccionar a una oferta y en
+ * la que el anti-francotirador entra en juego: se muestra en rojo y contando al
+ * segundo, porque es el único momento en que los segundos importan.
+ */
+export function urgencyOf(endsAt: Date, now: Date = new Date()): Urgency {
+  const ms = endsAt.getTime() - now.getTime();
+  if (ms <= 0) return "closed";
+  if (ms <= URGENCY_FINAL_MINUTES * 60_000) return "final";
+  if (ms <= URGENCY_SOON_MINUTES * 60_000) return "soon";
+  return "normal";
+}
+
+/// Cuenta regresiva compacta. En los últimos minutos muestra mm:ss; antes, la
+/// unidad más grande, que es lo único que se lee de un vistazo.
+export function countdownLabel(endsAt: Date, now: Date = new Date()): string {
+  const ms = endsAt.getTime() - now.getTime();
+  if (ms <= 0) return "Cerrada";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const seconds = totalSeconds % 60;
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const hours = Math.floor(totalSeconds / 3600) % 24;
+  const days = Math.floor(totalSeconds / 86400);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (totalSeconds >= URGENCY_FINAL_MINUTES * 60) return `${hours}h ${minutes}m`;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/// Cada cuánto conviene refrescar la cuenta regresiva según lo que falte.
+export function countdownInterval(urgency: Urgency): number {
+  if (urgency === "final") return 1000;
+  if (urgency === "soon") return 30_000;
+  return 60_000;
+}

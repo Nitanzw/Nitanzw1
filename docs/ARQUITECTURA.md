@@ -43,6 +43,7 @@ src/lib/                 Lógica sin UI. Testeable y reutilizable.
   rate-limit.ts          Límite de intentos por ventana de tiempo.
   fulltext.ts            Búsqueda full-text en español (con respaldo a ILIKE).
   listing-query.ts       Params de /buscar → consulta Prisma (página y alertas).
+  listing-schema.ts      Validación del formulario de publicación.
   search.ts              Query params → consulta Prisma.
   storage.ts             Imágenes: procesamiento y destino (local / S3).
   tokens.ts              Tokens de un solo uso (verificación, recuperación).
@@ -161,6 +162,21 @@ significa exactamente lo mismo en los dos lugares. Si necesitas ejecutar una
 búsqueda desde otro punto (un feed, un informe), llama a esa función en vez de
 rearmar los filtros.
 
+### Mostrar una hora o una cuenta regresiva
+
+El servidor y el navegador nunca tienen el mismo reloj, así que un componente
+que calcule la hora al renderizar produce un desajuste de hidratación. El patrón
+del proyecto (`src/components/countdown.tsx`) es: el servidor calcula el texto
+inicial y lo pasa como prop, el cliente lo usa tal cual en el primer render y
+recién después toma el control con su propio reloj.
+
+### Bloquear a alguien
+
+`getCurrentUser()` devuelve `null` si la cuenta está suspendida, así que el
+bloqueo corta todas las acciones de una vez sin tener que acordarse de
+comprobarlo en cada Server Action. Al suspender también hay que sacar de
+circulación lo publicado: eso lo hace `toggleUserBlockAction`.
+
 ### Tocar las reglas de la subasta
 
 Las reglas puras (oferta mínima, validación, extensión anti-francotirador,
@@ -218,3 +234,4 @@ Vercel Cron o GitHub Actions.
 - Integración con Webpay.
 - Bloqueo de usuarios en el panel de administración (hoy se moderan avisos y calificaciones).
 - Que una calificación muy baja avise al equipo de moderación.
+- Notificaciones en el sitio (hoy los avisos de subasta van solo por correo).

@@ -91,6 +91,10 @@ model User {
   bio           String?
   role          Role      @default(USER)
   emailVerified DateTime?
+  /// Cuenta suspendida por moderación. Un usuario bloqueado no puede iniciar
+  /// sesión ni operar, y sus avisos dejan de mostrarse.
+  blockedAt     DateTime?
+  blockedReason String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -394,10 +398,13 @@ model Auction {
   /// corre el cierre otro tanto, para que nadie gane por ofertar en el segundo 59.
   extensionMinutes Int      @default(5)
 
-  status   AuctionStatus @default(ACTIVE)
-  closedAt DateTime?
+  status                AuctionStatus @default(ACTIVE)
+  closedAt              DateTime?
+  /// Cuándo se avisó a quienes ofertaron que el cierre estaba encima, para no
+  /// mandarles el mismo correo en cada corrida del cron.
+  closingSoonNotifiedAt DateTime?
   /// Ganador, una vez cerrada.
-  winnerId String?
+  winnerId              String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

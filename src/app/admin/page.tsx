@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Administración" };
 export default async function AdminHomePage() {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [users, active, paused, pendingReports, featured, revenue, newListings, reviews, badReviews] = await Promise.all([
+  const [users, active, paused, pendingReports, featured, revenue, newListings, reviews, badReviews, blocked] = await Promise.all([
     prisma.user.count(),
     prisma.listing.count({ where: { status: "ACTIVE" } }),
     prisma.listing.count({ where: { status: { in: ["PAUSED", "EXPIRED", "REJECTED"] } } }),
@@ -20,6 +20,7 @@ export default async function AdminHomePage() {
     prisma.listing.count({ where: { createdAt: { gte: since } } }),
     prisma.review.count(),
     prisma.review.count({ where: { rating: { lte: 2 } } }),
+    prisma.user.count({ where: { blockedAt: { not: null } } }),
   ]);
 
   const cards = [
@@ -28,6 +29,7 @@ export default async function AdminHomePage() {
     { label: "Avisos pausados o vencidos", value: String(paused) },
     { label: "Avisos nuevos (30 días)", value: String(newListings) },
     { label: "Avisos destacados vigentes", value: String(featured) },
+    { label: "Cuentas suspendidas", value: String(blocked) },
     { label: "Calificaciones publicadas", value: String(reviews) },
     { label: "Calificaciones de 1 o 2 estrellas", value: String(badReviews) },
     ...(features.payments

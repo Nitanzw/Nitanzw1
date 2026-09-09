@@ -70,6 +70,14 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
     return { error: "Correo o contraseña incorrectos" };
   }
 
+  if (user.blockedAt) {
+    return {
+      error: user.blockedReason
+        ? `Tu cuenta está suspendida: ${user.blockedReason}`
+        : "Tu cuenta está suspendida. Escríbenos a contacto@oktienda.cl.",
+    };
+  }
+
   resetRateLimit(`login:${email}`);
   await createSession(user.id);
   redirect(next.startsWith("/") ? next : "/mi-cuenta");

@@ -181,3 +181,61 @@ export async function sendAuctionClosedEmail(
     ].join("\n"),
   });
 }
+
+export async function sendAuctionClosingSoonEmail(
+  user: { name: string; email: string },
+  auction: {
+    listingTitle: string;
+    listingHref: string;
+    minutesLeft: number;
+    winning: boolean;
+    currentAmount: number;
+  },
+): Promise<boolean> {
+  const site = siteUrl();
+
+  return sendMail({
+    to: user.email,
+    subject: auction.winning
+      ? `Vas ganando "${auction.listingTitle}" y cierra pronto`
+      : `Última oportunidad: "${auction.listingTitle}" cierra pronto`,
+    text: [
+      `Hola ${user.name.split(" ")[0]},`,
+      "",
+      `La subasta de "${auction.listingTitle}" cierra en aproximadamente ${auction.minutesLeft} minutos.`,
+      auction.winning
+        ? `Vas ganando con $${auction.currentAmount.toLocaleString("es-CL")}.`
+        : `La oferta más alta es de $${auction.currentAmount.toLocaleString("es-CL")} y no es la tuya.`,
+      "",
+      `Ver la subasta: ${site}${auction.listingHref}`,
+      "",
+      "Recuerda: una oferta en los últimos minutos extiende el cierre, así que",
+      "siempre alcanzas a responder.",
+      "",
+      "— oktienda.cl",
+    ].join("\n"),
+  });
+}
+
+export async function sendAccountBlockedEmail(
+  user: { name: string; email: string },
+  reason: string | null,
+): Promise<boolean> {
+  return sendMail({
+    to: user.email,
+    subject: "Tu cuenta de oktienda.cl fue suspendida",
+    text: [
+      `Hola ${user.name.split(" ")[0]},`,
+      "",
+      "Suspendimos tu cuenta en oktienda.cl y tus avisos dejaron de mostrarse.",
+      reason ? `Motivo: ${reason}` : "",
+      "",
+      "Si crees que se trata de un error, respóndenos a contacto@oktienda.cl y",
+      "lo revisamos.",
+      "",
+      "— oktienda.cl",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+}

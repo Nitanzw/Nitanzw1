@@ -16,7 +16,7 @@ import { ReputationBadge } from "@/components/rating-stars";
 import { reputationOf } from "@/lib/reputation";
 import { features } from "@/lib/features";
 import { auctionForListing } from "@/lib/auction-service";
-import { reserveMet } from "@/lib/auctions";
+import { countdownLabel, reserveMet, urgencyOf } from "@/lib/auctions";
 import { AuctionPanel } from "@/components/auction-panel";
 
 export const dynamic = "force-dynamic";
@@ -144,6 +144,8 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
                 extensionMinutes: auctionData.auction.extensionMinutes,
                 extended:
                   auctionData.auction.endsAt.getTime() !== auctionData.auction.originalEndsAt.getTime(),
+                countdownLabel: countdownLabel(auctionData.auction.endsAt),
+                urgency: urgencyOf(auctionData.auction.endsAt),
                 reserveMet: reserveMet(auctionData.state),
                 bidCount: auctionData.auction._count.bids,
                 highest: auctionData.auction.bids[0]

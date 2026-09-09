@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ImageIcon, MapPin, Star } from "lucide-react";
+import { Gavel, ImageIcon, MapPin, Star } from "lucide-react";
 import { formatPrice, formatRelativeDate, listingHref } from "@/lib/utils";
 import type { Currency, PriceType } from "@prisma/client";
 
@@ -15,10 +15,12 @@ export type ListingCardData = {
   createdAt: Date;
   images: { url: string; thumbnailUrl: string | null }[];
   commune: { name: string } | null;
+  auction?: { status: string; endsAt: Date; _count: { bids: number } } | null;
 };
 
 export function ListingCard({ listing }: { listing: ListingCardData }) {
   const featured = listing.featuredUntil ? listing.featuredUntil > new Date() : false;
+  const auctionOpen = listing.auction?.status === "ACTIVE" && listing.auction.endsAt > new Date();
   const cover = listing.images[0]?.thumbnailUrl ?? listing.images[0]?.url;
 
   return (
@@ -40,6 +42,11 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
             <ImageIcon className="size-10" />
           </div>
         )}
+        {auctionOpen && (
+          <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+            <Gavel className="size-3" /> Subasta
+          </span>
+        )}
         {featured && (
           <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-amber-950">
             <Star className="size-3 fill-current" /> Destacado
@@ -51,6 +58,13 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
         <p className="text-lg font-bold text-ink-900">
           {formatPrice(listing.price, listing.currency, listing.priceType)}
         </p>
+        {auctionOpen && (
+          <p className="-mt-1 text-xs font-medium text-amber-700">
+            {listing.auction?._count.bids === 0
+              ? "Sin ofertas todavía"
+              : `${listing.auction?._count.bids} ${listing.auction?._count.bids === 1 ? "oferta" : "ofertas"}`}
+          </p>
+        )}
         <h3 className="line-clamp-2 text-sm text-ink-700">{listing.title}</h3>
         <div className="mt-auto flex items-center justify-between pt-2 text-xs text-ink-500">
           <span className="flex items-center gap-1 truncate">

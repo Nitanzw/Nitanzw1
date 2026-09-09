@@ -56,6 +56,18 @@ enum TokenType {
   PASSWORD_RESET
 }
 
+enum AuctionStatus {
+  ACTIVE
+  /// Cerrada con ganador: la oferta más alta alcanzó la reserva (o no había).
+  WON
+  /// Cerrada sin ofertas.
+  NO_BIDS
+  /// Hubo ofertas, pero ninguna alcanzó el precio de reserva.
+  RESERVE_NOT_MET
+  /// El vendedor la canceló antes del cierre.
+  CANCELLED
+}
+
 /// Rol de quien escribe la calificación en ese trato.
 enum ReviewRole {
   BUYER
@@ -91,6 +103,7 @@ model User {
   reports               Report[]
   payments              Payment[]
   tokens                Token[]
+  bids                  Bid[]          @relation("BidBidder")
   reviewsWritten        Review[]       @relation("ReviewAuthor")
   reviewsReceived       Review[]       @relation("ReviewSubject")
 
@@ -175,6 +188,7 @@ model Listing {
   updatedAt     DateTime  @updatedAt
 
   images        ListingImage[]
+  auction       Auction?
   reviews       Review[]
   payments      Payment[]
   favorites     Favorite[]
@@ -251,8 +265,11 @@ model Message {
   id             String       @id @default(cuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  senderId       String
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  /// Nulo en los mensajes automáticos (cierre de subasta, avisos del sistema).
+  senderId       String?
+  sender         User?        @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  /// Marca los mensajes que escribe oktienda.cl, no una persona.
+  system         Boolean      @default(false)
   body           String
   readAt         DateTime?
   createdAt      DateTime     @default(now())
@@ -352,4 +369,56 @@ model Review {
   @@unique([conversationId, authorId])
   @@index([subjectId, createdAt])
   @@index([listingId])
+}
+
+/// Subasta de un aviso. Sin pagos: la oferta es un compromiso de palabra y, al
+/// cerrar, el sistema pone en contacto al vendedor con el ganador. Lo que
+/// sostiene el compromiso es la reputación, no un depósito.
+model Auction {
+  id        String  @id @default(cuid())
+  listingId String  @unique
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  /// Desde cuánto parten las ofertas.
+  startPrice   Int
+  /// Cuánto hay que superar a la oferta más alta.
+  minIncrement Int  @default(1000)
+  /// Precio mínimo que acepta el vendedor. Oculto para quienes ofertan: solo se
+  /// muestra si ya se alcanzó o no. Sin reserva, gana la oferta más alta.
+  reservePrice Int?
+
+  endsAt           DateTime
+  /// Cierre original, para poder mostrar que la subasta se extendió.
+  originalEndsAt   DateTime
+  /// Ventana anti-francotirador: una oferta dentro de estos minutos finales
+  /// corre el cierre otro tanto, para que nadie gane por ofertar en el segundo 59.
+  extensionMinutes Int      @default(5)
+
+  status   AuctionStatus @default(ACTIVE)
+  closedAt DateTime?
+  /// Ganador, una vez cerrada.
+  winnerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bids Bid[]
+
+  @@index([status, endsAt])
+}
+
+/// Oferta de una subasta. Nunca se borran: el historial es parte de la
+/// transparencia de la subasta.
+model Bid {
+  id        String  @id @default(cuid())
+  auctionId String
+  auction   Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bidderId  String
+  bidder    User    @relation("BidBidder", fields: [bidderId], references: [id], onDelete: Cascade)
+
+  amount    Int
+  createdAt DateTime @default(now())
+
+  @@index([auctionId, amount])
+  @@index([bidderId])
 }

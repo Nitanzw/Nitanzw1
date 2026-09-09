@@ -8,6 +8,7 @@ const TABS = [
   { href: "/mi-cuenta", label: "Mis avisos" },
   { href: "/mi-cuenta/favoritos", label: "Favoritos" },
   { href: "/mi-cuenta/mensajes", label: "Mensajes" },
+  { href: "/mi-cuenta/ofertas", label: "Mis ofertas" },
   { href: "/mi-cuenta/busquedas", label: "Búsquedas" },
   { href: "/mi-cuenta/calificaciones", label: "Calificaciones" },
   { href: "/mi-cuenta/perfil", label: "Mi perfil" },

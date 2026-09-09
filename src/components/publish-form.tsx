@@ -5,6 +5,7 @@ import { Loader2, Upload, X } from "lucide-react";
 import type { Vertical } from "@prisma/client";
 import { createListingAction } from "@/app/actions/listings";
 import { fieldsFor } from "@/lib/verticals";
+import { AUCTION_DURATIONS } from "@/lib/auctions";
 
 type CategoryOption = {
   id: string;
@@ -24,10 +25,12 @@ export function PublishForm({
   categories,
   regions,
   defaultPhone,
+  auctionsEnabled,
 }: {
   categories: CategoryOption[];
   regions: RegionOption[];
   defaultPhone: string;
+  auctionsEnabled: boolean;
 }) {
   const [state, action, pending] = useActionState(createListingAction, undefined);
 
@@ -45,8 +48,11 @@ export function PublishForm({
   const [regionId, setRegionId] = useState("");
   const communes = regions.find((r) => r.id === regionId)?.communes ?? [];
 
+  const [saleType, setSaleType] = useState<"FIXED" | "AUCTION">("FIXED");
+  const isAuction = auctionsEnabled && saleType === "AUCTION";
+
   const [priceType, setPriceType] = useState("FIXED");
-  const priceNeeded = priceType === "FIXED" || priceType === "NEGOTIABLE";
+  const priceNeeded = !isAuction && (priceType === "FIXED" || priceType === "NEGOTIABLE");
 
   const [images, setImages] = useState<{ url: string; thumbnailUrl: string }[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -126,8 +132,35 @@ export function PublishForm({
         </div>
       </section>
 
+      {auctionsEnabled && (
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-ink-900">2. ¿Cómo lo vendes?</h2>
+          <input type="hidden" name="saleType" value={saleType} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { value: "FIXED" as const, title: "Precio directo", text: "Publicas un precio y te contactan." },
+              { value: "AUCTION" as const, title: "Subasta", text: "Reciben ofertas y gana la más alta al cerrar." },
+            ].map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                onClick={() => setSaleType(option.value)}
+                className={`rounded-xl border-2 p-4 text-left transition ${
+                  saleType === option.value
+                    ? "border-brand-500 bg-brand-50"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <p className="font-semibold text-ink-900">{option.title}</p>
+                <p className="mt-1 text-sm text-ink-500">{option.text}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-ink-900">2. Tu aviso</h2>
+        <h2 className="font-semibold text-ink-900">{auctionsEnabled ? "3." : "2."} Tu aviso</h2>
         <label className={labelClass}>
           Título
           <input
@@ -153,6 +186,54 @@ export function PublishForm({
           />
         </label>
 
+        {isAuction ? (
+          <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-900">
+              En una subasta la gente oferta y gana la oferta más alta al cerrar. No se cobra
+              nada por el sitio: al terminar te ponemos en contacto con el ganador.
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={labelClass}>
+                Precio inicial
+                <input
+                  name="startPrice"
+                  inputMode="numeric"
+                  required
+                  placeholder="100000"
+                  className={inputClass}
+                />
+              </label>
+
+              <label className={labelClass}>
+                Incremento mínimo <span className="font-normal text-ink-500">(opcional)</span>
+                <input name="minIncrement" inputMode="numeric" placeholder="5000" className={inputClass} />
+              </label>
+
+              <label className={labelClass}>
+                Precio de reserva <span className="font-normal text-ink-500">(opcional)</span>
+                <input name="reservePrice" inputMode="numeric" placeholder="180000" className={inputClass} />
+                <span className="mt-1 block text-xs text-ink-500">
+                  Nadie lo ve. Si las ofertas no lo alcanzan, no estás obligado a vender.
+                </span>
+              </label>
+
+              <label className={labelClass}>
+                Duración
+                <select name="durationDays" defaultValue={7} className={inputClass}>
+                  {AUCTION_DURATIONS.map((option) => (
+                    <option key={option.days} value={option.days}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-ink-500">
+                  Si alguien oferta en los últimos 5 minutos, el cierre se extiende.
+                </span>
+              </label>
+            </div>
+          </div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-3">
           <label className={labelClass}>
             Tipo de precio
@@ -190,6 +271,7 @@ export function PublishForm({
             </select>
           </label>
         </div>
+        )}
 
         <label className={labelClass}>
           Estado del producto

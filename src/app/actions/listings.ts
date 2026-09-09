@@ -9,6 +9,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseAttributes } from "@/lib/verticals";
 import { listingHref, slugify } from "@/lib/utils";
 import { deleteImage } from "@/lib/storage";
+import { features } from "@/lib/features";
+import { AUCTION_DURATIONS, MIN_INCREMENT_FLOOR } from "@/lib/auctions";
 
 export type ListingFormState = { error?: string } | undefined;
 
@@ -19,14 +21,19 @@ const listingSchema = z.object({
   description: z.string().trim().min(20, "Describe tu aviso con al menos 20 caracteres").max(5000),
   categoryId: z.string().min(1, "Elige una categoría"),
   communeId: z.string().optional().or(z.literal("").transform(() => undefined)),
-  priceType: z.enum(["FIXED", "NEGOTIABLE", "FREE", "ON_REQUEST"]),
-  currency: z.enum(["CLP", "UF", "USD"]),
+  priceType: z.enum(["FIXED", "NEGOTIABLE", "FREE", "ON_REQUEST"]).default("FIXED"),
+  currency: z.enum(["CLP", "UF", "USD"]).default("CLP"),
   price: z.coerce.number().int().nonnegative().optional(),
   condition: z.enum(["NEW", "USED"]).optional().or(z.literal("").transform(() => undefined)),
   contactPhone: z.string().trim().max(20).optional().or(z.literal("").transform(() => undefined)),
   contactWhatsapp: z.coerce.boolean().optional(),
   allowMessages: z.coerce.boolean().optional(),
   images: z.string().optional(),
+  saleType: z.enum(["FIXED", "AUCTION"]).optional(),
+  startPrice: z.coerce.number().int().positive().optional(),
+  minIncrement: z.coerce.number().int().min(MIN_INCREMENT_FLOOR).optional(),
+  reservePrice: z.coerce.number().int().positive().optional(),
+  durationDays: z.coerce.number().int().optional(),
 });
 
 /// El formulario envía las imágenes ya subidas como JSON: [{url, thumbnailUrl}].
@@ -77,7 +84,20 @@ export async function createListingAction(
     return { error: "Faltan datos obligatorios de la categoría elegida" };
   }
 
-  const priceNeeded = parsed.data.priceType === "FIXED" || parsed.data.priceType === "NEGOTIABLE";
+  const isAuction = features.auctions && parsed.data.saleType === "AUCTION";
+
+  if (isAuction) {
+    if (!parsed.data.startPrice) return { error: "Ingresa el precio inicial de la subasta" };
+    if (parsed.data.reservePrice && parsed.data.reservePrice < parsed.data.startPrice) {
+      return { error: "El precio de reserva no puede ser menor que el precio inicial" };
+    }
+    if (!AUCTION_DURATIONS.some((option) => option.days === parsed.data.durationDays)) {
+      return { error: "Elige una duración válida para la subasta" };
+    }
+  }
+
+  const priceNeeded =
+    !isAuction && (parsed.data.priceType === "FIXED" || parsed.data.priceType === "NEGOTIABLE");
   if (priceNeeded && (parsed.data.price === undefined || Number.isNaN(parsed.data.price))) {
     return { error: "Ingresa un precio o elige 'Consultar precio'" };
   }
@@ -85,14 +105,15 @@ export async function createListingAction(
   const images = parseImages(parsed.data.images);
 
   const now = new Date();
+  const auctionEnd = new Date(now.getTime() + (parsed.data.durationDays ?? 7) * 24 * 60 * 60 * 1000);
   const listing = await prisma.listing.create({
     data: {
       slug: slugify(parsed.data.title),
       title: parsed.data.title,
       description: parsed.data.description,
-      price: priceNeeded ? parsed.data.price ?? null : null,
+      price: isAuction ? parsed.data.startPrice ?? null : priceNeeded ? parsed.data.price ?? null : null,
+      priceType: isAuction ? "FIXED" : parsed.data.priceType,
       currency: parsed.data.currency,
-      priceType: parsed.data.priceType,
       condition: parsed.data.condition ?? null,
       status: "ACTIVE",
       publishedAt: now,
@@ -105,6 +126,17 @@ export async function createListingAction(
       contactWhatsapp: Boolean(parsed.data.contactWhatsapp),
       allowMessages: parsed.data.allowMessages === undefined ? true : Boolean(parsed.data.allowMessages),
       images: { create: images.map((image, position) => ({ ...image, position })) },
+      ...(isAuction && {
+        auction: {
+          create: {
+            startPrice: parsed.data.startPrice!,
+            minIncrement: parsed.data.minIncrement ?? Math.max(MIN_INCREMENT_FLOOR, Math.round(parsed.data.startPrice! * 0.02)),
+            reservePrice: parsed.data.reservePrice ?? null,
+            endsAt: auctionEnd,
+            originalEndsAt: auctionEnd,
+          },
+        },
+      }),
     },
   });
 

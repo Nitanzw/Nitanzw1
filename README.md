@@ -67,6 +67,8 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 - **Cuenta**: mis avisos (pausar / reactivar / marcar vendido / eliminar), favoritos,
   mensajes y perfil con cambio de contraseña.
 - **Mensajería** comprador ↔ vendedor por aviso.
+- **Subastas** con precio de reserva oculto y extensión anti-francotirador. Sin
+  pagos: al cerrar, el sistema pone en contacto al vendedor con el ganador.
 - **Calificaciones entre usuarios** después de un contacto real, con derecho a
   réplica y moderación: la defensa contra estafas.
 - **Destacados pagados** listos pero **apagados** (`FEATURE_PAYMENTS`): catálogo
@@ -92,6 +94,27 @@ punto de extensión, y casi ninguno requiere tocar la base de datos.
 `MAIL_DRIVER` elige el transporte: `console` (escribe el correo en el log, ideal
 en desarrollo), `smtp` (cualquier servidor SMTP) o `resend`. Los correos
 transaccionales viven en `src/lib/emails.ts`.
+
+## Subastas
+
+Un aviso puede publicarse a precio directo o **a remate**. La subasta no mueve
+dinero: cuando cierra, oktienda.cl abre la conversación entre el vendedor y el
+ganador con un mensaje automático, y ellos coordinan la entrega. Lo que sostiene
+el compromiso de una oferta es la reputación, no un depósito.
+
+- **Precio de reserva oculto**: el vendedor fija un mínimo que nadie ve. Quienes
+  ofertan solo saben si ya se alcanzó. Si al cerrar no se alcanzó, no hay ganador
+  y el vendedor no queda obligado a vender.
+- **Extensión anti-francotirador**: una oferta en los últimos 5 minutos corre el
+  cierre otros 5, así nadie gana por ofertar en el segundo 59.
+- Nadie puede ofertar en su propia subasta ni contra su propia oferta, y cada
+  oferta debe superar a la más alta por el incremento mínimo.
+- Las ofertas simultáneas se resuelven en una transacción `SERIALIZABLE` con
+  reintento: de dos ofertas iguales a la vez, entra una sola.
+- El historial de ofertas es público, con el nombre de pila de quien ofertó.
+- El cierre lo hace `/api/cron/subastas`; conviene correrlo cada 5 minutos.
+
+Después del cierre, comprador y vendedor se califican como en cualquier venta.
 
 ## Calificaciones y confianza
 
@@ -120,6 +143,7 @@ sin ramas paralelas ni borrar nada:
 | --- | --- | --- |
 | `FEATURE_PAYMENTS` | `off` | Pantalla de destacar, checkout y webhook de pagos |
 | `FEATURE_REVIEWS` | `on` | Calificaciones entre usuarios |
+| `FEATURE_AUCTIONS` | `on` | Publicar a remate y ofertar |
 
 Con los pagos apagados, `/destacar` responde 404 y no se ofrece por ninguna
 parte, pero los avisos que ya tengan `featuredUntil` vigente se siguen
@@ -140,10 +164,12 @@ Ambas rutas se protegen con `CRON_SECRET`:
 | --- | --- | --- |
 | `/api/cron/expirar` | Vence avisos pasados de fecha, apaga destacados caducados y limpia tokens | Una vez al día |
 | `/api/cron/alertas` | Avisa por correo los avisos nuevos que calzan con una búsqueda guardada | Cada 1-6 horas |
+| `/api/cron/subastas` | Cierra las subastas vencidas, abre el contacto con el ganador y avisa por correo | **Cada 5 minutos** |
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/expirar
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/alertas
+curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/subastas
 ```
 
 ## Búsqueda
@@ -240,6 +266,8 @@ src/
     tokens.ts          Tokens de un solo uso (verificación, recuperación)
     featuring.ts       Acreditación de pagos y vigencia del destacado
     payments.ts        Proveedores de pago intercambiables
+    auctions.ts        Reglas de la subasta (mínimos, extensión, cierre)
+    auction-service.ts Ofertas y cierre contra la base de datos
     plans.ts           Catálogo de planes de destacado  ← oferta comercial
     prisma.ts          Cliente de base de datos
     search.ts          Traducción de query params a consultas Prisma

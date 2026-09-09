@@ -251,6 +251,44 @@ async function main() {
     });
   }
 
+  console.log("Creando una subasta de ejemplo…");
+  const categoriaBicicletas = await prisma.category.findUnique({
+    where: { slug: slugify("Deportes y outdoor-Bicicletas") },
+  });
+  if (categoriaBicicletas) {
+    const slugSubasta = slugify("Bicicleta de montaña Trek en subasta");
+    const existeSubasta = await prisma.listing.findFirst({ where: { slug: slugSubasta } });
+    if (!existeSubasta) {
+      const cierre = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      await prisma.listing.create({
+        data: {
+          slug: slugSubasta,
+          title: "Bicicleta de montaña Trek en subasta",
+          description:
+            "Trek Marlin 7 talla M, aro 29, poco uso. Se remata al mejor postor: parte en $150.000 y cierra en 5 días.",
+          price: 150000,
+          status: "ACTIVE",
+          publishedAt: new Date(),
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60),
+          attributes: {},
+          categoryId: categoriaBicicletas.id,
+          userId: demo.id,
+          communeId: santiago?.id ?? null,
+          contactPhone: demo.phone,
+          auction: {
+            create: {
+              startPrice: 150000,
+              minIncrement: 5000,
+              reservePrice: 200000,
+              endsAt: cierre,
+              originalEndsAt: cierre,
+            },
+          },
+        },
+      });
+    }
+  }
+
   console.log("Creando conversaciones y calificaciones de ejemplo…");
   const compradora = await prisma.user.upsert({
     where: { email: "compradora@oktienda.cl" },

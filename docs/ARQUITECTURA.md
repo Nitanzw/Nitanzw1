@@ -28,6 +28,8 @@ prisma/seed.ts           Regiones, comunas, categorías, cuentas demo y admin.
 prisma/fulltext.ts       Columna generada e índice GIN de la búsqueda.
 
 src/lib/                 Lógica sin UI. Testeable y reutilizable.
+  auction-service.ts     Ofertas y cierre de subastas contra la base.
+  auctions.ts            Reglas puras de la subasta (mínimos, extensión, cierre).
   auth.ts                Sesión (JWT en cookie httpOnly) y contraseñas.
   emails.ts              Plantillas de correos transaccionales.
   featuring.ts           Acreditación de pagos y vigencia de destacados.
@@ -159,6 +161,18 @@ significa exactamente lo mismo en los dos lugares. Si necesitas ejecutar una
 búsqueda desde otro punto (un feed, un informe), llama a esa función en vez de
 rearmar los filtros.
 
+### Tocar las reglas de la subasta
+
+Las reglas puras (oferta mínima, validación, extensión anti-francotirador,
+resultado del cierre) están en `src/lib/auctions.ts`, sin base de datos y con
+test propio: cámbialas ahí y el resto sigue. `src/lib/auction-service.ts` es lo
+que las aplica contra Postgres.
+
+Cuidado con una cosa: registrar una oferta corre en una transacción
+`SERIALIZABLE` que **vuelve a leer la oferta más alta adentro**. Sin eso, dos
+ofertas simultáneas podrían aceptarse ambas y saltarse el incremento mínimo. Si
+tocas `placeBid`, no saques esa relectura ni el reintento por `P2034`.
+
 ### Tocar la búsqueda de texto
 
 El diccionario, los pesos y el índice viven en `prisma/fulltext.ts`; el consumo,
@@ -180,6 +194,7 @@ Vercel Cron o GitHub Actions.
 | Sesión propia con JWT en cookie, sin librería de auth | Menos dependencias y control total sobre el flujo; el proyecto no necesita OAuth todavía. |
 | Atributos en JSON en vez de tablas por vertical | Sumar verticales no debe implicar migraciones ni joins nuevos. |
 | Server Actions en vez de API REST | Una sola capa que mantener; la validación vive junto al uso. |
+| Subasta sin pagos ni depósitos | El sitio es de contactos: lo que respalda una oferta es la reputación. Un depósito exigiría cobrar. |
 | Búsqueda con `tsvector` generado en Postgres | Resuelve tildes y plurales con un índice GIN, sin sumar un servicio externo como Meilisearch. |
 | Límite de intentos en memoria | Suficiente para una instancia. Con varias, reemplazar por Redis en `rate-limit.ts`. |
 | Imágenes procesadas al subir | Evita depender de un servicio de transformación y abarata el CDN. |

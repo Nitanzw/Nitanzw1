@@ -65,6 +65,17 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
       <div className="space-y-3 border-x border-slate-200 bg-slate-50 p-4">
         {conversation.messages.map((message) => {
+          if (message.system) {
+            return (
+              <p
+                key={message.id}
+                className="mx-auto max-w-md rounded-lg bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+              >
+                {message.body}
+              </p>
+            );
+          }
+
           const mine = message.senderId === user.id;
           return (
             <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>

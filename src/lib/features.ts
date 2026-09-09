@@ -32,4 +32,10 @@ export const features = {
   get reviews(): boolean {
     return enabled("FEATURE_REVIEWS", true);
   },
+
+  /// Subastas: publicar un aviso a remate y ofertar por él. Sin pagos: al
+  /// cerrar, el sistema pone en contacto al vendedor con el ganador.
+  get auctions(): boolean {
+    return enabled("FEATURE_AUCTIONS", true);
+  },
 };

@@ -16,7 +16,7 @@ export default async function MessagesPage() {
       listing: { select: { title: true, images: { take: 1, orderBy: { position: "asc" } } } },
       buyer: { select: { id: true, name: true } },
       seller: { select: { id: true, name: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, system: true } },
     },
   });
 
@@ -52,7 +52,8 @@ export default async function MessagesPage() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-ink-900">{conversation.listing.title}</p>
               <p className="truncate text-sm text-ink-500">
-                <span className="font-medium">{other.name}:</span> {last?.body ?? "—"}
+                {last?.system ? null : <span className="font-medium">{other.name}: </span>}
+                {last?.body ?? "—"}
               </p>
             </div>
             <span className="shrink-0 text-xs text-ink-500">{formatRelativeDate(conversation.updatedAt)}</span>

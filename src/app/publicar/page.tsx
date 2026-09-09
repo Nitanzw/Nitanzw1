@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { PublishForm } from "@/components/publish-form";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Publicar un aviso" };
@@ -28,7 +29,12 @@ export default async function PublishPage() {
       <p className="mt-1 text-sm text-ink-500">
         Es gratis y queda online al instante. Mientras mejores fotos y datos, más rápido vendes.
       </p>
-      <PublishForm categories={categories} regions={regions} defaultPhone={user.phone ?? ""} />
+      <PublishForm
+        categories={categories}
+        regions={regions}
+        defaultPhone={user.phone ?? ""}
+        auctionsEnabled={features.auctions}
+      />
     </div>
   );
 }

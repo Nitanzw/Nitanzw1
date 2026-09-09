@@ -41,6 +41,7 @@ export default async function SearchPage({
         createdAt: true,
         commune: { select: { name: true } },
         images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
+  auction: { select: { status: true, endsAt: true, _count: { select: { bids: true } } } },
       },
     }),
     prisma.listing.count({ where }),

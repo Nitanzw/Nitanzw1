@@ -100,3 +100,84 @@ export async function sendSavedSearchAlertEmail(
     ].join("\n"),
   });
 }
+
+export async function sendOutbidEmail(
+  user: { name: string; email: string },
+  auction: { listingTitle: string; listingHref: string; amount: number; endsAt: Date },
+): Promise<boolean> {
+  return sendMail({
+    to: user.email,
+    subject: `Te superaron la oferta en "${auction.listingTitle}"`,
+    text: [
+      `Hola ${user.name.split(" ")[0]},`,
+      "",
+      `Alguien ofertó $${auction.amount.toLocaleString("es-CL")} por "${auction.listingTitle}".`,
+      `La subasta cierra el ${auction.endsAt.toLocaleString("es-CL")}.`,
+      "",
+      `Ofertar de nuevo: ${siteUrl()}${auction.listingHref}`,
+      "",
+      "— oktienda.cl",
+    ].join("\n"),
+  });
+}
+
+export async function sendAuctionClosedEmail(
+  user: { name: string; email: string },
+  auction: {
+    listingTitle: string;
+    listingHref: string;
+    role: "SELLER" | "WINNER";
+    status: "WON" | "NO_BIDS" | "RESERVE_NOT_MET";
+    amount: number | null;
+    conversationId: string | null;
+  },
+): Promise<boolean> {
+  const site = siteUrl();
+  const nombre = user.name.split(" ")[0];
+
+  if (auction.status === "WON") {
+    const monto = `$${auction.amount?.toLocaleString("es-CL")}`;
+    return sendMail({
+      to: user.email,
+      subject:
+        auction.role === "WINNER"
+          ? `¡Ganaste la subasta de "${auction.listingTitle}"!`
+          : `Tu subasta de "${auction.listingTitle}" cerró con ganador`,
+      text: [
+        `Hola ${nombre},`,
+        "",
+        auction.role === "WINNER"
+          ? `Ganaste la subasta de "${auction.listingTitle}" con una oferta de ${monto}.`
+          : `Tu subasta de "${auction.listingTitle}" cerró en ${monto}.`,
+        "",
+        `Ya abrimos la conversación para que se pongan de acuerdo:`,
+        `${site}/mi-cuenta/mensajes/${auction.conversationId}`,
+        "",
+        "Recuerda: en oktienda.cl no se paga por el sitio. Coordinen la entrega",
+        "directamente y, cuando terminen, califíquense para que el resto sepa",
+        "cómo les fue.",
+        "",
+        "— oktienda.cl",
+      ].join("\n"),
+    });
+  }
+
+  const motivo =
+    auction.status === "NO_BIDS"
+      ? "No recibió ofertas."
+      : "Recibió ofertas, pero ninguna alcanzó tu precio de reserva.";
+
+  return sendMail({
+    to: user.email,
+    subject: `Tu subasta de "${auction.listingTitle}" cerró sin venta`,
+    text: [
+      `Hola ${nombre},`,
+      "",
+      `Tu subasta de "${auction.listingTitle}" ya cerró. ${motivo}`,
+      "",
+      `Puedes volver a publicarla con otro precio: ${site}/publicar`,
+      "",
+      "— oktienda.cl",
+    ].join("\n"),
+  });
+}

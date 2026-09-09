@@ -15,6 +15,9 @@ import { ReportListing } from "@/components/report-listing";
 import { ReputationBadge } from "@/components/rating-stars";
 import { reputationOf } from "@/lib/reputation";
 import { features } from "@/lib/features";
+import { auctionForListing } from "@/lib/auction-service";
+import { reserveMet } from "@/lib/auctions";
+import { AuctionPanel } from "@/components/auction-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +63,13 @@ export async function generateMetadata({
   };
 }
 
+/// En el historial de ofertas se muestra solo el nombre de pila: basta para
+/// seguir la puja sin exponer la identidad completa de quien oferta.
+function firstName(name: string): string {
+  const [first] = name.trim().split(/\s+/);
+  return first ?? name;
+}
+
 export default async function ListingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [listing, user] = await Promise.all([getListing(slug), getCurrentUser()]);
@@ -74,6 +84,9 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
       })
     : null;
 
+  // La subasta reemplaza al precio y al contacto directo mientras esté abierta.
+  const auctionData = features.auctions ? await auctionForListing(listing.id) : null;
+
   const attributes = Object.entries((listing.attributes ?? {}) as Record<string, unknown>)
     .map(([key, value]) => describeAttribute(listing.category.vertical, key, value))
     .filter((item): item is { label: string; value: string } => item !== null);
@@ -87,6 +100,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
       featuredUntil: true, publishedAt: true, createdAt: true,
       commune: { select: { name: true } },
       images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
+  auction: { select: { status: true, endsAt: true, _count: { select: { bids: true } } } },
     },
   });
 
@@ -118,13 +132,49 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
         <div className="min-w-0 space-y-6">
           <Gallery images={listing.images} title={listing.title} />
 
+          {auctionData && (
+            <AuctionPanel
+              data={{
+                auctionId: auctionData.auction.id,
+                status: auctionData.auction.status,
+                startPrice: auctionData.auction.startPrice,
+                minIncrement: auctionData.auction.minIncrement,
+                minimum: auctionData.minimum,
+                endsAt: auctionData.auction.endsAt.toISOString(),
+                extensionMinutes: auctionData.auction.extensionMinutes,
+                extended:
+                  auctionData.auction.endsAt.getTime() !== auctionData.auction.originalEndsAt.getTime(),
+                reserveMet: reserveMet(auctionData.state),
+                bidCount: auctionData.auction._count.bids,
+                highest: auctionData.auction.bids[0]
+                  ? {
+                      amount: auctionData.auction.bids[0].amount,
+                      bidderName: firstName(auctionData.auction.bids[0].bidder.name),
+                    }
+                  : null,
+                bids: auctionData.auction.bids.map((bid) => ({
+                  id: bid.id,
+                  amount: bid.amount,
+                  bidderName: firstName(bid.bidder.name),
+                  createdAt: bid.createdAt.toISOString(),
+                })),
+                isSeller: isOwner,
+                isWinning: auctionData.auction.bids[0]?.bidder.id === user?.id,
+                loggedIn: Boolean(user),
+                from: `/aviso/${slug}`,
+              }}
+            />
+          )}
+
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-xl font-bold text-ink-900 sm:text-2xl">{listing.title}</h1>
-                <p className="mt-2 text-3xl font-black text-brand-700">
-                  {formatPrice(listing.price, listing.currency, listing.priceType)}
-                </p>
+                {!auctionData && (
+                  <p className="mt-2 text-3xl font-black text-brand-700">
+                    {formatPrice(listing.price, listing.currency, listing.priceType)}
+                  </p>
+                )}
               </div>
 
               <form action={toggleFavoriteAction}>

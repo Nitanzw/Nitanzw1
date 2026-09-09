@@ -141,6 +141,19 @@ export function SearchFilters({
       </div>
 
       <div>
+        <h2 className="text-sm font-bold text-ink-900">Tipo de venta</h2>
+        <select
+          name="tipo"
+          defaultValue={value(params, "tipo")}
+          className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        >
+          <option value="">Todo</option>
+          <option value="subasta">Solo subastas abiertas</option>
+          <option value="directo">Solo venta directa</option>
+        </select>
+      </div>
+
+      <div>
         <h2 className="text-sm font-bold text-ink-900">Estado</h2>
         <select
           name="estado"

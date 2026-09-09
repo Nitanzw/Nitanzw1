@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { MessagesSquare, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Gavel, MessagesSquare, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ListingCard } from "@/components/listing-card";
 import { CategoryIcon } from "@/components/category-icon";
 import { HomeSearch } from "@/components/home-search";
 import { features } from "@/lib/features";
+import { closingSoonWhere } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,20 @@ const LISTING_CARD_SELECT = {
 } as const;
 
 export default async function HomePage() {
-  const [categories, featured, recent, regions] = await Promise.all([
+  const [categories, closingSoon, featured, recent, regions] = await Promise.all([
     prisma.category.findMany({
       where: { parentId: null },
       orderBy: { position: "asc" },
       select: { id: true, slug: true, name: true, icon: true, _count: { select: { listings: true } } },
     }),
+    features.auctions
+      ? prisma.listing.findMany({
+          where: { status: "ACTIVE", ...closingSoonWhere() },
+          orderBy: { auction: { endsAt: "asc" } },
+          take: 4,
+          select: LISTING_CARD_SELECT,
+        })
+      : Promise.resolve([]),
     prisma.listing.findMany({
       where: { status: "ACTIVE", featuredUntil: { gt: new Date() } },
       orderBy: { publishedAt: "desc" },
@@ -82,6 +91,24 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {closingSoon.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pb-4">
+          <div className="flex items-end justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-ink-900">
+              <Gavel className="size-5 text-amber-500" /> Subastas que cierran pronto
+            </h2>
+            <Link href="/buscar?orden=cierra-pronto&tipo=subasta" className="text-sm font-medium text-brand-700 hover:underline">
+              Ver todas
+            </Link>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {closingSoon.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {featured.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pb-4">

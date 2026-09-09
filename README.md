@@ -114,6 +114,20 @@ el compromiso de una oferta es la reputación, no un depósito.
 - El historial de ofertas es público, con el nombre de pila de quien ofertó.
 - El cierre lo hace `/api/cron/subastas`; conviene correrlo cada 5 minutos.
 
+**Las que están por cerrar suben.** Como en cualquier sitio de remates, una
+subasta que termina hoy vale más que una que cierra en cinco días:
+
+- La portada tiene un bloque "Subastas que cierran pronto".
+- En los resultados, las que cierran dentro de **24 horas** se muestran en un
+  bloque arriba de la primera página, ordenadas por cierre más próximo. Se
+  apartan del listado normal (en todas las páginas) para que no aparezcan dos
+  veces ni descuadren la paginación.
+- Ese realce **respeta lo que pida el usuario**: si eligió "menor precio" u otro
+  orden, manda el suyo y el bloque no aparece.
+- Hay un orden explícito **"Cierra pronto"** y un filtro por tipo de venta
+  (solo subastas abiertas / solo venta directa).
+- Las tarjetas muestran la cuenta regresiva, en rojo cuando faltan menos de 3 horas.
+
 Después del cierre, comprador y vendedor se califican como en cualquier venta.
 
 ## Calificaciones y confianza

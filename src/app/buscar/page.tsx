@@ -1,16 +1,43 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { Gavel } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ListingCard } from "@/components/listing-card";
 import { SearchFilters } from "@/components/search-filters";
 import { SaveSearch } from "@/components/save-search";
 import { getCurrentUser } from "@/lib/auth";
 import { resolveListingQuery } from "@/lib/listing-query";
-import { PAGE_SIZE, SORT_OPTIONS, currentPage, withParam, type SearchParams } from "@/lib/search";
+import {
+  CLOSING_SOON_SLOTS,
+  PAGE_SIZE,
+  SORT_OPTIONS,
+  closingSoonWhere,
+  currentPage,
+  listingOffset,
+  shouldSurfaceClosingSoon,
+  withParam,
+  type SearchParams,
+} from "@/lib/search";
+import { features } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Buscar avisos" };
+
+const LISTING_CARD_SELECT = {
+  id: true,
+  slug: true,
+  title: true,
+  price: true,
+  currency: true,
+  priceType: true,
+  featuredUntil: true,
+  publishedAt: true,
+  createdAt: true,
+  commune: { select: { name: true } },
+  images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
+  auction: { select: { status: true, endsAt: true, _count: { select: { bids: true } } } },
+} as const;
 
 export default async function SearchPage({
   searchParams,
@@ -23,26 +50,30 @@ export default async function SearchPage({
   const { where, orderBy, category } = await resolveListingQuery(params);
   const page = currentPage(params);
 
+  /**
+   * Las subastas que cierran en las próximas horas se muestran arriba de la
+   * primera página, como en cualquier sitio de remates: son las únicas que el
+   * usuario todavía puede alcanzar. Se sacan del listado principal con `notIn`
+   * para que no aparezcan dos veces ni descuadren la paginación, y solo cuando
+   * el usuario no pidió otro orden.
+   */
+  const surfaceClosingSoon = features.auctions && shouldSurfaceClosingSoon(params);
+  const closingSoon = surfaceClosingSoon
+    ? await prisma.listing.findMany({
+        where: { AND: [where, closingSoonWhere()] },
+        orderBy: { auction: { endsAt: "asc" } },
+        take: CLOSING_SOON_SLOTS,
+        select: LISTING_CARD_SELECT,
+      })
+    : [];
+  const closingSoonIds = closingSoon.map((listing) => listing.id);
+
   const [listings, total, rootCategories, regions, communes] = await Promise.all([
     prisma.listing.findMany({
-      where,
+      where: closingSoonIds.length ? { AND: [where, { id: { notIn: closingSoonIds } }] } : where,
       orderBy,
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        price: true,
-        currency: true,
-        priceType: true,
-        featuredUntil: true,
-        publishedAt: true,
-        createdAt: true,
-        commune: { select: { name: true } },
-        images: { select: { url: true, thumbnailUrl: true }, orderBy: { position: "asc" }, take: 1 },
-  auction: { select: { status: true, endsAt: true, _count: { select: { bids: true } } } },
-      },
+      ...listingOffset(page, closingSoonIds.length),
+      select: LISTING_CARD_SELECT,
     }),
     prisma.listing.count({ where }),
     prisma.category.findMany({
@@ -132,7 +163,20 @@ export default async function SearchPage({
             </div>
           </div>
 
-          {listings.length === 0 ? (
+          {page === 1 && closingSoon.length > 0 && (
+            <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-amber-900">
+                <Gavel className="size-4" /> Subastas que cierran pronto
+              </h2>
+              <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                {closingSoon.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {listings.length === 0 && (page > 1 || closingSoon.length === 0) ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
               <p className="font-semibold text-ink-900">No encontramos avisos con esos filtros</p>
               <p className="mt-1 text-sm text-ink-500">Prueba con otras palabras o quita algunos filtros.</p>

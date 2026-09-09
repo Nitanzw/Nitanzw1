@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CLOSING_SOON_HOURS,
+  SORT_OPTIONS,
   buildListingOrderBy,
   buildListingWhere,
+  closingSoonWhere,
   currentPage,
+  listingOffset,
+  shouldSurfaceClosingSoon,
   withParam,
 } from "../src/lib/search.ts";
 
@@ -120,5 +125,66 @@ describe("texto libre", () => {
 
   it("ignora matchedIds cuando no hay texto buscado", () => {
     assert.deepEqual(conditions(buildListingWhere({}, { matchedIds: ["a"] })), []);
+  });
+});
+
+describe("subastas por cerrar", () => {
+  it("ofrece el orden por cierre próximo", () => {
+    assert.ok(SORT_OPTIONS.some((option) => option.value === "cierra-pronto"));
+  });
+
+  it("ordena por fecha de cierre ascendente", () => {
+    assert.deepEqual(buildListingOrderBy({ orden: "cierra-pronto" }), [
+      { auction: { endsAt: "asc" } },
+      { publishedAt: "desc" },
+    ]);
+  });
+
+  it("filtra solo subastas abiertas", () => {
+    const [condition] = conditions(buildListingWhere({ tipo: "subasta" }));
+    const auction = (condition as { auction: { is: { status: string; endsAt: { gt: Date } } } }).auction;
+    assert.equal(auction.is.status, "ACTIVE");
+    assert.ok(auction.is.endsAt.gt instanceof Date, "debe excluir las ya cerradas");
+  });
+
+  it("filtra solo venta directa", () => {
+    assert.deepEqual(conditions(buildListingWhere({ tipo: "directo" })), [{ auction: { is: null } }]);
+  });
+
+  it("la ventana de cierre próximo cubre las próximas horas", () => {
+    const ahora = new Date("2026-09-09T12:00:00Z");
+    const where = closingSoonWhere(ahora) as {
+      auction: { is: { endsAt: { gt: Date; lte: Date } } };
+    };
+    assert.equal(where.auction.is.endsAt.gt.toISOString(), ahora.toISOString());
+    assert.equal(
+      where.auction.is.endsAt.lte.getTime() - ahora.getTime(),
+      CLOSING_SOON_HOURS * 3600_000,
+    );
+  });
+
+  it("se apartan salvo que el usuario pida otro orden", () => {
+    assert.equal(shouldSurfaceClosingSoon({}), true);
+    assert.equal(shouldSurfaceClosingSoon({ orden: "destacados" }), true);
+    assert.equal(shouldSurfaceClosingSoon({ pagina: "2" }), true, "también en páginas siguientes");
+    assert.equal(
+      shouldSurfaceClosingSoon({ orden: "precio-asc" }),
+      false,
+      "si el usuario eligió un orden, manda el suyo",
+    );
+    assert.equal(shouldSurfaceClosingSoon({ orden: "cierra-pronto" }), false);
+  });
+
+  it("la paginación descuenta las que ya se mostraron arriba", () => {
+    // Página 1: 6 destacadas arriba + 18 del listado = 24 (PAGE_SIZE).
+    assert.deepEqual(listingOffset(1, 6), { skip: 0, take: 18 });
+    // Página 2: sigue justo donde quedó el listado, sin repetir ni saltarse nada.
+    assert.deepEqual(listingOffset(2, 6), { skip: 18, take: 24 });
+    assert.deepEqual(listingOffset(3, 6), { skip: 42, take: 24 });
+  });
+
+  it("sin subastas por cerrar la paginación es la de siempre", () => {
+    assert.deepEqual(listingOffset(1, 0), { skip: 0, take: 24 });
+    assert.deepEqual(listingOffset(2, 0), { skip: 24, take: 24 });
   });
 });

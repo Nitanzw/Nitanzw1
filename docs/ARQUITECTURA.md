@@ -173,6 +173,18 @@ Cuidado con una cosa: registrar una oferta corre en una transacción
 ofertas simultáneas podrían aceptarse ambas y saltarse el incremento mínimo. Si
 tocas `placeBid`, no saques esa relectura ni el reintento por `P2034`.
 
+### Realzar avisos en los resultados
+
+Las subastas por cerrar se muestran arriba de la primera página. El patrón, si
+necesitas realzar otra cosa, es el de `src/app/buscar/page.tsx`: una consulta
+aparte para lo realzado y un `notIn` en la consulta principal, con el desfase de
+paginación calculado por `listingOffset()`. Sin ese `notIn` los mismos avisos
+aparecen dos veces; sin el desfase, la página 2 se salta o repite filas.
+
+Dos reglas que conviene mantener: el realce solo aplica cuando el usuario no
+pidió otro orden, y lo apartado se excluye en **todas** las páginas, aunque el
+bloque se dibuje solo en la primera.
+
 ### Tocar la búsqueda de texto
 
 El diccionario, los pesos y el índice viven en `prisma/fulltext.ts`; el consumo,

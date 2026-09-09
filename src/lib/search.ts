@@ -6,11 +6,18 @@ export type SearchParams = Record<string, string | string[] | undefined>;
 export const PAGE_SIZE = 24;
 
 export const SORT_OPTIONS = [
+  { value: "destacados", label: "Destacados primero" },
+  { value: "cierra-pronto", label: "Cierra pronto" },
   { value: "recientes", label: "Más recientes" },
   { value: "precio-asc", label: "Menor precio" },
   { value: "precio-desc", label: "Mayor precio" },
-  { value: "destacados", label: "Destacados primero" },
 ] as const;
+
+/// Ventana en la que una subasta se considera "por cerrar" y sube en la lista.
+export const CLOSING_SOON_HOURS = 24;
+
+/// Cuántas subastas por cerrar se muestran arriba de todo en la primera página.
+export const CLOSING_SOON_SLOTS = 6;
 
 function first(value: string | string[] | undefined): string | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -72,6 +79,15 @@ export function buildListingWhere(
     and.push({ price: { ...(min !== undefined && { gte: min }), ...(max !== undefined && { lte: max }) } });
   }
 
+  // "Solo subastas" muestra únicamente remates abiertos; "solo venta directa"
+  // deja fuera todo lo que esté en subasta.
+  const tipo = first(params.tipo);
+  if (tipo === "subasta") {
+    and.push({ auction: { is: { status: "ACTIVE", endsAt: { gt: new Date() } } } });
+  } else if (tipo === "directo") {
+    and.push({ auction: { is: null } });
+  }
+
   const estado = first(params.estado);
   if (estado === "nuevo") and.push({ condition: "NEW" });
   if (estado === "usado") and.push({ condition: "USED" });
@@ -110,11 +126,44 @@ export function buildListingOrderBy(params: SearchParams): Prisma.ListingOrderBy
       return [{ price: "asc" }, { publishedAt: "desc" }];
     case "precio-desc":
       return [{ price: "desc" }, { publishedAt: "desc" }];
-    case "destacados":
-      return [{ featuredUntil: "desc" }, { publishedAt: "desc" }];
+    case "recientes":
+      return [{ publishedAt: "desc" }];
+    case "cierra-pronto":
+      // Postgres deja los nulos al final en orden ascendente, así que los avisos
+      // sin subasta quedan después de todos los remates abiertos.
+      return [{ auction: { endsAt: "asc" } }, { publishedAt: "desc" }];
     default:
       return [{ featuredUntil: "desc" }, { publishedAt: "desc" }];
   }
+}
+
+/// Filtro de las subastas que están por cerrar, para destacarlas arriba de la
+/// lista sin alterar el orden del resto.
+export function closingSoonWhere(now: Date = new Date()): Prisma.ListingWhereInput {
+  return {
+    auction: {
+      is: {
+        status: "ACTIVE",
+        endsAt: { gt: now, lte: new Date(now.getTime() + CLOSING_SOON_HOURS * 60 * 60 * 1000) },
+      },
+    },
+  };
+}
+
+/// Si corresponde apartar las subastas por cerrar del listado normal. Solo
+/// cuando el usuario no pidió otro orden: si eligió "menor precio", manda lo
+/// que eligió. Se apartan en todas las páginas —aunque el bloque destacado se
+/// muestre solo en la primera— para que no aparezcan dos veces.
+export function shouldSurfaceClosingSoon(params: SearchParams): boolean {
+  const orden = first(params.orden);
+  return orden === undefined || orden === "destacados";
+}
+
+/// Desde qué fila pedir el listado normal, descontando las que ya se muestran
+/// arriba en la primera página.
+export function listingOffset(page: number, surfacedCount: number): { skip: number; take: number } {
+  if (page === 1) return { skip: 0, take: PAGE_SIZE - surfacedCount };
+  return { skip: (page - 1) * PAGE_SIZE - surfacedCount, take: PAGE_SIZE };
 }
 
 export function currentPage(params: SearchParams): number {

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Gavel, ImageIcon, MapPin, Star } from "lucide-react";
+import { Clock, Gavel, ImageIcon, MapPin, Star } from "lucide-react";
 import { formatPrice, formatRelativeDate, listingHref } from "@/lib/utils";
+import { timeLeftLabel } from "@/lib/auctions";
 import type { Currency, PriceType } from "@prisma/client";
 
 export type ListingCardData = {
@@ -19,8 +20,13 @@ export type ListingCardData = {
 };
 
 export function ListingCard({ listing }: { listing: ListingCardData }) {
-  const featured = listing.featuredUntil ? listing.featuredUntil > new Date() : false;
-  const auctionOpen = listing.auction?.status === "ACTIVE" && listing.auction.endsAt > new Date();
+  // Una sola lectura del reloj para todo el render de la tarjeta.
+  const now = new Date();
+  const featured = listing.featuredUntil ? listing.featuredUntil > now : false;
+  const auctionOpen = listing.auction?.status === "ACTIVE" && listing.auction.endsAt > now;
+  // Menos de 3 horas: se marca en rojo, porque es cuando conviene actuar.
+  const closingSoon =
+    auctionOpen && listing.auction!.endsAt.getTime() - now.getTime() < 3 * 60 * 60 * 1000;
   const cover = listing.images[0]?.thumbnailUrl ?? listing.images[0]?.url;
 
   return (
@@ -59,10 +65,16 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
           {formatPrice(listing.price, listing.currency, listing.priceType)}
         </p>
         {auctionOpen && (
-          <p className="-mt-1 text-xs font-medium text-amber-700">
-            {listing.auction?._count.bids === 0
-              ? "Sin ofertas todavía"
-              : `${listing.auction?._count.bids} ${listing.auction?._count.bids === 1 ? "oferta" : "ofertas"}`}
+          <p className="-mt-1 flex flex-wrap items-center gap-x-2 text-xs font-medium">
+            <span className="text-amber-700">
+              {listing.auction?._count.bids === 0
+                ? "Sin ofertas"
+                : `${listing.auction?._count.bids} ${listing.auction?._count.bids === 1 ? "oferta" : "ofertas"}`}
+            </span>
+            <span className={`flex items-center gap-1 ${closingSoon ? "text-red-600" : "text-ink-500"}`}>
+              <Clock className="size-3" />
+              {timeLeftLabel(listing.auction!.endsAt, now).replace("Cierra en ", "")}
+            </span>
           </p>
         )}
         <h3 className="line-clamp-2 text-sm text-ink-700">{listing.title}</h3>

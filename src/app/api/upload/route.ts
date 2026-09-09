@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES, storeImage } from "@/lib/storage";
+import { reportError } from "@/lib/report-error";
 
 /// Sube una imagen: valida, normaliza a WebP, genera miniatura y la guarda
 /// en el almacenamiento configurado (disco local o S3/R2).
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const stored = await storeImage(Buffer.from(await file.arrayBuffer()));
     return NextResponse.json(stored);
   } catch (error) {
-    console.error("Error al procesar la imagen", error);
+    await reportError(error, { where: "api/upload", userId: user.id });
     return NextResponse.json({ error: "No pudimos procesar la imagen" }, { status: 500 });
   }
 }

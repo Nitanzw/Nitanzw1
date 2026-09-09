@@ -9,6 +9,27 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
 
+    # Una base real: así el CI comprueba que las migraciones aplican desde cero,
+    # que es exactamente lo que hará el despliegue en producción.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oktienda
+          POSTGRES_PASSWORD: oktienda
+          POSTGRES_DB: oktienda
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://oktienda:oktienda@localhost:5432/oktienda?schema=public
+      AUTH_SECRET: ci-secret-para-el-build-solamente
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +43,25 @@ jobs:
       - name: Generar cliente de Prisma
         run: npx prisma generate
 
+      # Prisma necesita una base aparte para reconstruir el estado de las
+      # migraciones: usar la principal la dejaría vacía.
+      - name: Base de sombra para la comprobación
+        run: PGPASSWORD=oktienda psql -h localhost -U oktienda -d oktienda -c "CREATE DATABASE sombra"
+
+      - name: Comprobar que el esquema y las migraciones no se separaron
+        run: >-
+          npx prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema-datamodel prisma/schema.prisma
+          --shadow-database-url postgresql://oktienda:oktienda@localhost:5432/sombra
+          --exit-code
+
+      - name: Aplicar migraciones sobre una base vacía
+        run: npm run db:deploy
+
+      - name: Datos iniciales
+        run: npm run db:seed
+
       - name: Tipos
         run: npm run typecheck
 
@@ -33,8 +73,3 @@ jobs:
 
       - name: Build
         run: npx next build
-        env:
-          # El build no consulta la base: todas las páginas se renderizan por
-          # petición. Estas variables solo tienen que existir.
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-          AUTH_SECRET: ci-secret-para-el-build-solamente

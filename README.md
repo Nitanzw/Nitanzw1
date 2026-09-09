@@ -22,8 +22,7 @@ Base multi-vertical: general, **vehículos**, **propiedades**, servicios y emple
 ```bash
 npm install
 cp .env.example .env          # completa DATABASE_URL y AUTH_SECRET
-npm run db:push               # crea las tablas
-npm run db:fulltext           # prepara la búsqueda en español
+npm run db:deploy             # crea las tablas, el índice y el trigger de búsqueda
 npm run db:seed               # regiones, comunas, categorías y avisos demo
 npm run dev                   # http://localhost:3000
 ```
@@ -49,8 +48,11 @@ Genera el secreto de sesión con `openssl rand -base64 32`.
 | `npm run typecheck` | Chequeo de tipos |
 | `npm run lint` | ESLint |
 | `npm test` | Tests unitarios de `src/lib` |
-| `npm run db:push` | Sincroniza el esquema con la base |
-| `npm run db:fulltext` | Crea la columna e índice de búsqueda full-text |
+| `npm run db:deploy` | Aplica las migraciones (**esto es lo que se usa en producción**) |
+| `npm run db:migrate` | Crea una migración nueva tras cambiar el esquema |
+| `npm run db:push` | Sincroniza el esquema sin migración. Solo en desarrollo: puede borrar columnas |
+| `npm run db:fulltext` | Repara la búsqueda full-text si quedó a medias tras un `db:push` |
+| `npm run mail:test` | Envía un correo de prueba con la configuración actual |
 | `npm run db:migrate` | Crea una migración versionada |
 | `npm run db:seed` | Carga datos iniciales |
 | `npm run db:studio` | Explorador visual de la base |
@@ -199,12 +201,20 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/alerta
 curl -H "Authorization: Bearer $CRON_SECRET" https://oktienda.cl/api/cron/subastas
 ```
 
+## Despliegue
+
+Todo el procedimiento —variables, migraciones, tareas programadas, respaldos,
+correo y la lista de verificación previa a abrir— está en
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md). Hay `Dockerfile` y
+`docker-compose.yml` listos, y `vercel.json` con las tareas programadas.
+
 ## Búsqueda
 
-El texto libre se resuelve con una columna `tsvector` generada por Postgres sobre
-el título y la descripción, con el diccionario español y sin tildes, más un índice
-GIN. La crea `npm run db:fulltext`, que hay que correr **después de cada
-`npm run db:push`** porque Prisma no genera columnas calculadas.
+El texto libre se resuelve con una columna `tsvector` que mantiene un trigger de
+Postgres sobre el título y la descripción, con el diccionario español y sin
+tildes, más un índice GIN. Todo eso lo crea la migración `busqueda_fulltext`, así
+que una base nueva queda lista con `npm run db:deploy`. `npm run db:fulltext`
+existe para repararlo si alguien corrió `db:push` y se llevó el trigger por delante.
 
 Si esa columna no existe, la búsqueda cae sola a una coincidencia por subcadena y
 avisa en el log: un despliegue al que se le olvidó el paso sigue funcionando.
@@ -307,7 +317,6 @@ src/
 
 Cosas que la base deja preparadas pero todavía no implementa:
 
-- Editar un aviso ya publicado (hoy solo se puede pausar, marcar vendido o eliminar).
 - Notificaciones dentro del sitio: hoy los avisos van solo por correo.
 - Boleta electrónica y Webpay, para cuando se enciendan los pagos.
 - Ordenar los resultados por relevancia (hoy el full-text decide qué coincide y el

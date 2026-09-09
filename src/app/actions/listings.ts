@@ -114,6 +114,111 @@ export async function createListingAction(
   redirect(listingHref(listing));
 }
 
+/**
+ * Editar un aviso ya publicado.
+ *
+ * Se puede corregir el texto, las fotos, la categoría, la ubicación y el
+ * contacto. Lo que **no** se puede tocar es la subasta: cambiar el precio
+ * inicial o la reserva con ofertas encima sería mover la meta a mitad del
+ * remate. Para eso hay que cerrar y volver a publicar.
+ */
+export async function updateListingAction(
+  _state: ListingFormState,
+  formData: FormData,
+): Promise<ListingFormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/ingresar");
+
+  const listingId = String(formData.get("listingId") ?? "");
+  const existing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    select: { id: true, userId: true, auction: { select: { id: true } } },
+  });
+  if (!existing || existing.userId !== user.id) {
+    return { error: "No puedes editar este aviso" };
+  }
+
+  const raw = formToObject(formData);
+  const parsed = listingSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Revisa los datos del aviso" };
+  }
+
+  const category = await prisma.category.findUnique({ where: { id: parsed.data.categoryId } });
+  if (!category) return { error: "La categoría seleccionada no existe" };
+
+  let attributes: Record<string, string | number | boolean>;
+  try {
+    attributes = parseAttributes(category.vertical, raw);
+  } catch {
+    return { error: "Faltan datos obligatorios de la categoría elegida" };
+  }
+
+  // En una subasta el precio lo manda el remate, no el formulario.
+  const isAuction = Boolean(existing.auction);
+  const priceNeeded =
+    !isAuction && (parsed.data.priceType === "FIXED" || parsed.data.priceType === "NEGOTIABLE");
+  if (priceNeeded && parsed.data.price === undefined) {
+    return { error: "Ingresa un precio o elige 'Consultar precio'" };
+  }
+
+  const images = parseImages(parsed.data.images);
+
+  const previous = await prisma.listingImage.findMany({
+    where: { listingId },
+    select: { url: true, thumbnailUrl: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.listing.update({
+      where: { id: listingId },
+      data: {
+        slug: slugify(parsed.data.title),
+        title: parsed.data.title,
+        description: parsed.data.description,
+        ...(isAuction
+          ? {}
+          : {
+              price: priceNeeded ? parsed.data.price ?? null : null,
+              priceType: parsed.data.priceType,
+              currency: parsed.data.currency,
+            }),
+        condition: parsed.data.condition ?? null,
+        attributes,
+        categoryId: category.id,
+        communeId: parsed.data.communeId ?? null,
+        contactPhone: parsed.data.contactPhone ?? null,
+        contactWhatsapp: Boolean(parsed.data.contactWhatsapp),
+        allowMessages: parsed.data.allowMessages === undefined ? true : Boolean(parsed.data.allowMessages),
+      },
+    });
+
+    // Las imágenes se reemplazan por completo: el formulario manda la lista final.
+    await tx.listingImage.deleteMany({ where: { listingId } });
+    await tx.listingImage.createMany({
+      data: images.map((image, position) => ({ ...image, listingId, position })),
+    });
+  });
+
+  // Los archivos que ya no están en el aviso se borran del almacenamiento.
+  const conservadas = new Set(images.flatMap((image) => [image.url, image.thumbnailUrl]));
+  await Promise.all(
+    previous
+      .flatMap((image) => [image.url, image.thumbnailUrl])
+      .filter((url): url is string => Boolean(url) && !conservadas.has(url))
+      .map(deleteImage),
+  );
+
+  const updated = await prisma.listing.findUniqueOrThrow({
+    where: { id: listingId },
+    select: { id: true, slug: true },
+  });
+
+  revalidatePath("/mi-cuenta");
+  revalidatePath(listingHref(updated));
+  redirect(listingHref(updated));
+}
+
 /// Pausar, reactivar, marcar vendido o eliminar un aviso propio.
 export async function updateListingStatusAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();

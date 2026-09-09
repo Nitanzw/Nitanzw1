@@ -24,6 +24,7 @@ const COLUMNS = [
       { href: "/ayuda/como-publicar", label: "Cómo publicar" },
       { href: "/ayuda/consejos-de-seguridad", label: "Consejos de seguridad" },
       { href: "/ayuda/terminos", label: "Términos y condiciones" },
+      { href: "/ayuda/privacidad", label: "Privacidad y datos" },
     ],
   },
 ];

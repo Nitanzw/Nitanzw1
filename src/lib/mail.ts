@@ -105,7 +105,8 @@ export async function sendMail(message: MailMessage): Promise<boolean> {
     await transport(message);
     return true;
   } catch (error) {
-    console.error("No se pudo enviar el correo", error);
+    const { reportError } = await import("@/lib/report-error");
+    await reportError(error, { where: "correo", extra: { driver, asunto: message.subject } });
     return false;
   }
 }

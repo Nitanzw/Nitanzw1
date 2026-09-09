@@ -1,0 +1,43 @@
+# Levantar oktienda.cl completo en un servidor: aplicación + base.
+#
+#   cp .env.example .env   # completar antes de arrancar
+#   docker compose up -d --build
+#   docker compose exec app npx prisma migrate deploy
+#   docker compose exec app npx tsx prisma/seed.ts   # solo la primera vez
+#
+# Las imágenes quedan en un volumen; con STORAGE_DRIVER=s3 no hace falta.
+
+services:
+  base:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-oktienda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-oktienda}
+    volumes:
+      - datos:/var/lib/postgresql/data
+      - ./respaldos:/respaldos
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oktienda}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      base:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-oktienda}:${POSTGRES_PASSWORD}@base:5432/${POSTGRES_DB:-oktienda}?schema=public
+    ports:
+      - "3000:3000"
+    volumes:
+      - subidas:/app/public/uploads
+
+volumes:
+  datos:
+  subidas:

@@ -1,0 +1,21 @@
+# Tareas programadas de oktienda.cl en un servidor propio.
+# Copiar a la crontab del usuario que corre la aplicación: crontab -e
+#
+# En Vercel esto lo cubre vercel.json; acá se usa curl contra el mismo dominio.
+
+SITIO=https://oktienda.cl
+CRON_SECRET=el-mismo-valor-del-.env
+
+# Cierra las subastas vencidas y avisa a quienes ofertaron. Cada 5 minutos:
+# mientras no corra, una subasta vencida ya no acepta ofertas pero el contacto
+# con el ganador todavía no se abre.
+*/5 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $SITIO/api/cron/subastas > /dev/null
+
+# Alertas de búsquedas guardadas. Cada 3 horas.
+0 */3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $SITIO/api/cron/alertas > /dev/null
+
+# Vence avisos pasados de fecha y limpia tokens. Una vez al día.
+30 4 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $SITIO/api/cron/expirar > /dev/null
+
+# Respaldo diario de la base.
+0 3 * * * /ruta/al/proyecto/scripts/respaldo.sh >> /var/log/oktienda-respaldo.log 2>&1

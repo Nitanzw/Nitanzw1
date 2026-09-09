@@ -90,6 +90,12 @@ export default async function MyListingsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/mi-cuenta/avisos/${listing.id}/editar`}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-slate-50"
+            >
+              Editar
+            </Link>
             {features.payments && (
               <Link
                 href={`/destacar/${listing.id}`}

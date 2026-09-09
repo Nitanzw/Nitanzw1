@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import type { Vertical } from "@prisma/client";
-import { createListingAction } from "@/app/actions/listings";
+import { createListingAction, updateListingAction } from "@/app/actions/listings";
 import { fieldsFor } from "@/lib/verticals";
 import { AUCTION_DURATIONS } from "@/lib/auctions";
 
@@ -17,6 +17,28 @@ type CategoryOption = {
 
 type RegionOption = { id: string; name: string; communes: { id: string; name: string }[] };
 
+/// Valores de un aviso que ya existe, para editarlo con el mismo formulario.
+export type ListingDefaults = {
+  id: string;
+  title: string;
+  description: string;
+  price: number | null;
+  priceType: string;
+  currency: string;
+  condition: string | null;
+  categoryId: string;
+  parentCategoryId: string | null;
+  regionId: string | null;
+  communeId: string | null;
+  contactPhone: string | null;
+  contactWhatsapp: boolean;
+  allowMessages: boolean;
+  images: { url: string; thumbnailUrl: string }[];
+  attributes: Record<string, string | number | boolean>;
+  /// Un aviso en subasta no permite tocar precio ni condiciones del remate.
+  isAuction: boolean;
+};
+
 const inputClass =
   "mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400";
 const labelClass = "block text-sm font-medium text-ink-700";
@@ -26,35 +48,43 @@ export function PublishForm({
   regions,
   defaultPhone,
   auctionsEnabled,
+  listing,
 }: {
   categories: CategoryOption[];
   regions: RegionOption[];
   defaultPhone: string;
   auctionsEnabled: boolean;
+  /// Presente al editar: el mismo formulario sirve para crear y para corregir.
+  listing?: ListingDefaults;
 }) {
-  const [state, action, pending] = useActionState(createListingAction, undefined);
+  const editing = Boolean(listing);
+  const [state, action, pending] = useActionState(
+    editing ? updateListingAction : createListingAction,
+    undefined,
+  );
 
   const parents = useMemo(() => categories.filter((c) => !c.parentId), [categories]);
-  const [parentId, setParentId] = useState("");
+  const [parentId, setParentId] = useState(listing?.parentCategoryId ?? "");
   const children = useMemo(
     () => categories.filter((c) => c.parentId === parentId),
     [categories, parentId],
   );
 
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState(listing?.categoryId ?? "");
   const selected = categories.find((c) => c.id === categoryId) ?? categories.find((c) => c.id === parentId);
   const verticalFields = selected ? fieldsFor(selected.vertical) : [];
 
-  const [regionId, setRegionId] = useState("");
+  const [regionId, setRegionId] = useState(listing?.regionId ?? "");
   const communes = regions.find((r) => r.id === regionId)?.communes ?? [];
 
   const [saleType, setSaleType] = useState<"FIXED" | "AUCTION">("FIXED");
-  const isAuction = auctionsEnabled && saleType === "AUCTION";
+  // Al editar, la subasta ya está definida y no se puede convertir el aviso.
+  const isAuction = editing ? Boolean(listing?.isAuction) : auctionsEnabled && saleType === "AUCTION";
 
-  const [priceType, setPriceType] = useState("FIXED");
+  const [priceType, setPriceType] = useState(listing?.priceType ?? "FIXED");
   const priceNeeded = !isAuction && (priceType === "FIXED" || priceType === "NEGOTIABLE");
 
-  const [images, setImages] = useState<{ url: string; thumbnailUrl: string }[]>([]);
+  const [images, setImages] = useState<{ url: string; thumbnailUrl: string }[]>(listing?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -132,7 +162,9 @@ export function PublishForm({
         </div>
       </section>
 
-      {auctionsEnabled && (
+      {editing && <input type="hidden" name="listingId" value={listing!.id} />}
+
+      {auctionsEnabled && !editing && (
         <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="font-semibold text-ink-900">2. ¿Cómo lo vendes?</h2>
           <input type="hidden" name="saleType" value={saleType} />
@@ -160,7 +192,9 @@ export function PublishForm({
       )}
 
       <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-ink-900">{auctionsEnabled ? "3." : "2."} Tu aviso</h2>
+        <h2 className="font-semibold text-ink-900">
+          {auctionsEnabled && !editing ? "3." : "2."} Tu aviso
+        </h2>
         <label className={labelClass}>
           Título
           <input
@@ -168,6 +202,7 @@ export function PublishForm({
             required
             minLength={8}
             maxLength={120}
+            defaultValue={listing?.title}
             placeholder="Ej: Toyota Yaris 2020 único dueño"
             className={inputClass}
           />
@@ -181,12 +216,18 @@ export function PublishForm({
             minLength={20}
             maxLength={5000}
             rows={6}
+            defaultValue={listing?.description}
             placeholder="Cuenta el estado, accesorios, motivo de venta y forma de entrega."
             className={inputClass}
           />
         </label>
 
-        {isAuction ? (
+        {isAuction && editing ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Este aviso está en subasta: el precio lo definen las ofertas. Puedes corregir el
+            texto, las fotos y el contacto, pero no las condiciones del remate.
+          </p>
+        ) : isAuction ? (
           <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm text-amber-900">
               En una subasta la gente oferta y gana la oferta más alta al cerrar. No se cobra
@@ -257,6 +298,7 @@ export function PublishForm({
               inputMode="numeric"
               disabled={!priceNeeded}
               required={priceNeeded}
+              defaultValue={listing?.price ?? undefined}
               placeholder="9800000"
               className={`${inputClass} disabled:bg-slate-100`}
             />
@@ -264,7 +306,7 @@ export function PublishForm({
 
           <label className={labelClass}>
             Moneda
-            <select name="currency" className={inputClass} defaultValue="CLP">
+            <select name="currency" className={inputClass} defaultValue={listing?.currency ?? "CLP"}>
               <option value="CLP">Pesos (CLP)</option>
               <option value="UF">UF</option>
               <option value="USD">Dólares (USD)</option>
@@ -275,7 +317,7 @@ export function PublishForm({
 
         <label className={labelClass}>
           Estado del producto
-          <select name="condition" className={inputClass} defaultValue="">
+          <select name="condition" className={inputClass} defaultValue={listing?.condition ?? ""}>
             <option value="">No aplica</option>
             <option value="NEW">Nuevo</option>
             <option value="USED">Usado</option>
@@ -291,7 +333,12 @@ export function PublishForm({
               <label key={field.key} className={field.type === "boolean" ? "flex items-center gap-2 text-sm text-ink-700" : labelClass}>
                 {field.type === "boolean" ? (
                   <>
-                    <input type="checkbox" name={field.key} className="size-4 rounded border-slate-300 accent-emerald-600" />
+                    <input
+                      type="checkbox"
+                      name={field.key}
+                      defaultChecked={Boolean(listing?.attributes?.[field.key])}
+                      className="size-4 rounded border-slate-300 accent-emerald-600"
+                    />
                     {field.label}
                   </>
                 ) : (
@@ -299,7 +346,12 @@ export function PublishForm({
                     {field.label} {field.unit ? <span className="text-ink-500">({field.unit})</span> : null}
                     {field.required && <span className="text-red-500"> *</span>}
                     {field.type === "select" ? (
-                      <select name={field.key} required={field.required} className={inputClass} defaultValue="">
+                      <select
+                        name={field.key}
+                        required={field.required}
+                        className={inputClass}
+                        defaultValue={String(listing?.attributes?.[field.key] ?? "")}
+                      >
                         <option value="">Selecciona</option>
                         {field.options?.map((option) => (
                           <option key={option} value={option}>
@@ -312,6 +364,11 @@ export function PublishForm({
                         name={field.key}
                         required={field.required}
                         inputMode={field.type === "number" ? "numeric" : "text"}
+                        defaultValue={
+                          listing?.attributes?.[field.key] !== undefined
+                            ? String(listing.attributes[field.key])
+                            : undefined
+                        }
                         placeholder={field.placeholder}
                         className={inputClass}
                       />
@@ -379,7 +436,12 @@ export function PublishForm({
 
           <label className={labelClass}>
             Comuna
-            <select name="communeId" className={inputClass} disabled={!regionId} defaultValue="">
+            <select
+              name="communeId"
+              className={inputClass}
+              disabled={!regionId}
+              defaultValue={listing?.communeId ?? ""}
+            >
               <option value="">Elige una comuna</option>
               {communes.map((commune) => (
                 <option key={commune.id} value={commune.id}>
@@ -392,16 +454,31 @@ export function PublishForm({
 
         <label className={labelClass}>
           Teléfono de contacto
-          <input name="contactPhone" defaultValue={defaultPhone} placeholder="+56 9 1234 5678" className={inputClass} />
+          <input
+            name="contactPhone"
+            defaultValue={listing?.contactPhone ?? defaultPhone}
+            placeholder="+56 9 1234 5678"
+            className={inputClass}
+          />
         </label>
 
         <label className="flex items-center gap-2 text-sm text-ink-700">
-          <input type="checkbox" name="contactWhatsapp" defaultChecked className="size-4 rounded border-slate-300 accent-emerald-600" />
+          <input
+            type="checkbox"
+            name="contactWhatsapp"
+            defaultChecked={listing ? listing.contactWhatsapp : true}
+            className="size-4 rounded border-slate-300 accent-emerald-600"
+          />
           Aceptar contacto por WhatsApp
         </label>
 
         <label className="flex items-center gap-2 text-sm text-ink-700">
-          <input type="checkbox" name="allowMessages" defaultChecked className="size-4 rounded border-slate-300 accent-emerald-600" />
+          <input
+            type="checkbox"
+            name="allowMessages"
+            defaultChecked={listing ? listing.allowMessages : true}
+            className="size-4 rounded border-slate-300 accent-emerald-600"
+          />
           Recibir mensajes por el chat de oktienda
         </label>
       </section>
@@ -411,7 +488,13 @@ export function PublishForm({
         disabled={pending || uploading}
         className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
       >
-        {pending ? "Publicando…" : "Publicar aviso"}
+        {pending
+          ? editing
+            ? "Guardando…"
+            : "Publicando…"
+          : editing
+            ? "Guardar cambios"
+            : "Publicar aviso"}
       </button>
     </form>
   );

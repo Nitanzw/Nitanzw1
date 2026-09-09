@@ -10,11 +10,13 @@
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
+    "db:deploy": "prisma migrate deploy",
     "db:fulltext": "tsx prisma/fulltext.ts",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "test": "tsx --test \"tests/**/*.test.ts\""
+    "test": "tsx --test \"tests/**/*.test.ts\"",
+    "mail:test": "tsx --conditions=react-server scripts/probar-correo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

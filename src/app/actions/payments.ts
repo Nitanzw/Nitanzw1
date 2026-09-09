@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { findPlan } from "@/lib/plans";
 import { paymentProvider } from "@/lib/payments";
 import { features } from "@/lib/features";
+import { reportError } from "@/lib/report-error";
 
 export type CheckoutState = { error?: string } | undefined;
 
@@ -64,7 +65,7 @@ export async function startCheckoutAction(
     }
   } catch (error) {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
-    console.error("No se pudo iniciar el pago", error);
+    await reportError(error, { where: "accion/checkout", userId: user.id, extra: { planCode } });
     return { error: "No pudimos iniciar el pago. Inténtalo nuevamente en unos minutos." };
   }
 
